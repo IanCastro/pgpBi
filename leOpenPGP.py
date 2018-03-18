@@ -82,8 +82,15 @@ class openPGP:
 	def leSecretData(self, passphrase, symEncAlgo, salt, coded, encrData, IV):
 		bs = self.blockSize(symEncAlgo)
 		key = self.makeKey(salt, coded, bs, passphrase)
-		encrData = encrData+chr(0)*4
-		data = AES.new(key, AES.MODE_CFB, IV, segment_size = 128).decrypt(encrData)[:-4]
+		
+		lack = bs - len(encrData)%bs
+		# print 'lack',lack
+		# if symEncAlgo == AES
+		if lack != bs:
+			encrData = encrData+chr(0)*lack
+			data = AES.new(key, AES.MODE_CFB, IV, segment_size = 128).decrypt(encrData)[:-lack]
+		else:
+			data = AES.new(key, AES.MODE_CFB, IV, segment_size = 128).decrypt(encrData)
 
 		#print'data',binascii.hexlify(data)
 		p, dRSA = self.leMPId(0, data)
@@ -213,10 +220,11 @@ class openPGP:
 				MM = MM[MM.find(chr(0)):]
 				# print('sum', reduce(lambda x,y:x+ord(y), MM[2:-2], 0))
 				# print('check', self.toint(MM[-2:]))
+				#x+ord(y) mod 65k
 				if reduce(lambda x,y:x+ord(y), MM[2:-2], 0) == self.toint(MM[-2:]):
-					self.algo = ord(MM[1])
-					#print('algo', self.algo)
-					self.key = MM[2:-2]
+					self.symAlgo = ord(MM[1])
+					#print('algo', self.symAlgo)
+					self.key = MM[2:-2]# key to be used by the symmetric-key algorithm
 					#print('key', binascii.hexlify(self.key))
 
 			elif publicKeyAlgo == 16:
@@ -247,15 +255,16 @@ class openPGP:
 			p = pEnd
 			# key = '4bcb9206f7b3064d15f83c8f1399c4367a6bf57251ee1f5d2a19a4abcef34659'
 			# key = binascii.unhexlify(key)
-			if self.algo == 7 or self.algo == 8 or self.algo == 9:
+			if self.symAlgo == 7 or self.symAlgo == 8 or self.symAlgo == 9:
 				# print 'l',len(encrData)
-				lack = 16 - len(encrData)%self.blockSize(self.algo)
+				bs = self.blockSize(self.symAlgo)
+				lack = bs - len(encrData)%bs
 				# print 'lack',lack
-				if lack != 16:
+				if lack != bs:
 					encrData += '0'*lack
-					data = AES.new(self.key, AES.MODE_CFB, chr(0)*16, segment_size = 128).decrypt(encrData)[:-lack]
+					data = AES.new(self.key, AES.MODE_CFB, chr(0)*bs, segment_size = 128).decrypt(encrData)[:-lack]
 				else:
-					data = AES.new(self.key, AES.MODE_CFB, chr(0)*16, segment_size = 128).decrypt(encrData)
+					data = AES.new(self.key, AES.MODE_CFB, chr(0)*bs, segment_size = 128).decrypt(encrData)
 			else :
 				print'''Not Implemented yet'''
 				exit(1)
@@ -286,9 +295,10 @@ class openPGP:
 			p += 4
 			# print(dateCreated.strftime('%H:%M:%S %d/%m/%Y'))
 			literalData = self.encodedFile[p:pEnd]
+			# self.bbencodedFile = self.encodedFile[:p] + 'N' + self.encodedFile[p+1:]
 			p = pEnd
 			# print('literalData',literalData)
-			print(fileName, dateCreated.strftime('%H:%M:%S %d/%m/%Y'), literalData)
+			print('file:', fileName, dateCreated.strftime('%H:%M:%S %d/%m/%Y'), literalData)
 		else:
 			print "Literal Data Packet must be formatted with 'b', 't' or 'u'"
 			exit(1)
@@ -434,6 +444,18 @@ class openPGP:
 					crc ^= CRC24_POLY;
 		return crc
 
+	def encodeAsc(self):
+		crcFile = self.crc24(self.encodedFile)
+		base64File = base64.b64encode(self.encodedFile)
+		self.encodedFile = "-----BEGIN PGP MESSAGE-----\n\n"
+		p = 0
+		while p < len(base64File):
+			self.encodedFile += base64File[p: p+64] + '\n'
+			p += 64
+		self.encodedFile += '=' + base64.b64encode(binascii.unhexlify(hex(crcFile)[2:-1])) + '\n'
+		self.encodedFile += '-----END PGP MESSAGE-----\n'
+		return self
+
 	def decodeAsc(self):
 		# p = 5
 		# headers = {'BEGIN PGP MESSAGE',
@@ -446,36 +468,38 @@ class openPGP:
 		# 	if self.encodedFile[p: p+len(h)] == h:
 		# 		# print h
 		# 		p += len(h)+6
-		xxd = self.encodedFile.split('\n')
+		stringFile = self.encodedFile.split('\n')
 		p = 0
-		while xxd[p].strip() != '':
+		while stringFile[p].strip() != '':
 			p += 1
 		p += 1
-		q = len(xxd) - 1
-		while len(xxd[q]) == 0 or xxd[q][0] != '=':
+		q = len(stringFile) - 1
+		while len(stringFile[q]) == 0 or stringFile[q][0] != '=':
 			q -= 1
 
-		self.encodedFile = base64.b64decode(''.join(xxd[p:q]))
+		self.encodedFile = base64.b64decode(''.join(stringFile[p:q]))
 		crcFile = self.crc24(self.encodedFile)
-		if self.toint(base64.b64decode(xxd[q][1:])) != crcFile:
+		if self.toint(base64.b64decode(stringFile[q][1:])) != crcFile:
 			print 'corrupted file'
-			print 'crc24 on file',xxd[q][1:]
+			print 'crc24 on file',stringFile[q][1:]
 			print 'crc24 calculeded',base64.b64encode(binascii.unhexlify(hex(crcFile)[2:-1]))
 			exit(1)
-		print '=:',xxd[q]
-		print '=:',base64.b64decode(xxd[q][1:])
-		print '=:',binascii.hexlify(base64.b64decode(xxd[q][1:]))
-		print '===:',self.toint(base64.b64decode(xxd[q][1:]))
-		print '===:',crcFile
-		# print binascii.hexlify(self.encodedFile)	
-		print 'crc:',hex(crcFile)[2:-1]
-		print 'crc:',base64.b64encode(hex(crcFile)[2:-1])
-		print 'crc2:',base64.b64encode(binascii.unhexlify(hex(crcFile)[2:-1]))
+		# print '=:',xxd[q]
+		# print '=:',base64.b64decode(xxd[q][1:])
+		# print '=:',binascii.hexlify(base64.b64decode(xxd[q][1:]))
+		# print '===:',self.toint(base64.b64decode(xxd[q][1:]))
+		# print '===:',crcFile
+		# # print binascii.hexlify(self.encodedFile)	
+		# print 'crc:',hex(crcFile)[2:-1]
+		# print 'crc:',base64.b64encode(hex(crcFile)[2:-1])
+		# print 'crc2:',base64.b64encode(binascii.unhexlify(hex(crcFile)[2:-1]))
 
 	def ff(self):
 		# self.encodedFile = open("ml2.txt.decoded.gpg", "rb").read()
 		if self.encodedFile[0] == '-':
 			self.decodeAsc()
+		self.encodeAsc()
+		self.decodeAsc()
 		p = 0
 		while(p < len(self.encodedFile)):
 			# print(p,len(self.encodedFile))
@@ -522,6 +546,8 @@ class openPGP:
 			#print('length',length)
 			p = self.leTag(tag, p, length)
 
+		self.encodeAsc()
+		print self.encodedFile
 		# print()
 		# print(p)
 		# print(len(self.encodedFile))
@@ -531,5 +557,7 @@ class openPGP:
 ttt = '85010c03f7c1f4b58d60352a0108008dd909f507b10e2787c0a046ccbc3b81fca9267ab5d49065ada990789891a21246ea4bbdff21cd8d0bebba6160b7b5e964cc7ca69a02cd8a38333cc8e7c193c05810e9972c64eb170fb46481d82a8f8349a28f3391ab8cd79bd0c42c4dbb3a4c9f777275a62e218c9d8876463983c15c29e95f8962e04a9d581599478d78b5dd29394efafead8c683ad45c094dcce2426525c160ab87b1ef55b4343585657aac8d0477418f705dc77dfee0611c297e5b72ff9e858530885a37b634ed9fb6d4cebba46a937d3957f7d009107f3d1d90404c3f6481db9d4a626102abc36721c46b28841762a45f58330882d4f5e22989512daec1b8e89f867115caccb0de179783d24001805653862a53b4fef15a29427deed7b7e2940650e08a5e9fcc8cdeb03b0411e05dbf9ac2cc1a870aef75d30bc55992b3ab83bd8c5528819f6dc63100174ae7'
 ttt = binascii.unhexlify(ttt)
 # openPGP(ttt).ff()
-openPGP(open("ml2.txt.gpg", "rb").read()).ff()
-openPGP(open("secretKey.asc", "rb").read()).ff()
+# openPGP(open("ml2.txt.gpg", "rb").read()).ff()
+# openPGP(open("secretKey.asc", "rb").read()).ff()
+# print openPGP(open("ml2.txt.gpg", "rb").read()).encodeAsc().encodedFile
+# print openPGP(open("m.txt.asc", "rb").read()).ff()
