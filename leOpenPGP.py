@@ -189,6 +189,7 @@ class openPGP:
 		if version == 3:
 			keyId = self.encodedFile[p: p + 8]
 			p += 8
+			print 'keyId', binascii.hexlify(keyId)
 			publicKeyAlgo = ord(self.encodedFile[p])
 			p += 1
 			#9.1.  Public-Key Algorithms
@@ -332,7 +333,44 @@ class openPGP:
 
 	def UserIDPacket(self, p, pEnd):
 		# 5.11.  User ID Packet (Tag 13)
+		userId = self.encodedFile[p:pEnd]
+		print userId
 		return pEnd
+
+	def SignaturePacket(self, p, pEnd):
+		# 5.2.  Signature Packet (Tag 2)
+		version = ord(self.encodedFile[p])
+		p += 1
+		print('v',version)
+		if version == 3:
+			print'''5.2.2.  Version 3 Signature Packet Format'''
+		elif version == 4:
+			signatureType = ord(self.encodedFile[p])
+			p += 1
+			publicKeyAlgo = ord(self.encodedFile[p])
+			p += 1
+			hashAlgo = ord(self.encodedFile[p])
+			p += 1
+			hashedSubpacketLen = self.toint(self.encodedFile[p: p+2])
+			p += 2
+			hashedSubpacket = self.encodedFile[p: p+hashedSubpacketLen]
+			p += hashedSubpacketLen
+			print 'hashedSubpacket',binascii.hexlify(hashedSubpacket)
+			unhashedSubpacketLen = self.toint(self.encodedFile[p: p+2])
+			p += 2
+			unhashedSubpacket = self.encodedFile[p: p+unhashedSubpacketLen]
+			p += unhashedSubpacketLen
+			print 'unhashedSubpacket',binascii.hexlify(unhashedSubpacket)
+			# openPGP(unhashedSubpacket).ff()
+			signedHashValue = self.toint(self.encodedFile[p: p+2])
+			p += 2
+			while p != pEnd:
+				p, mm = self.leMPI(p)
+				# print (mm,'mm')
+		else:
+			print 'Signature Packet version must be 3 or 4'
+			exit(1)
+		return p
 
 	def leTag(self, tag, p, length):
 		# print('tag', tag)
@@ -350,6 +388,8 @@ class openPGP:
 			return self.ModificationDetectionCodePacket(p)
 		elif tag == 13:
 			return self.UserIDPacket(p, p+length)
+		elif tag == 2:
+			return self.SignaturePacket(p, p+length)
 		else:
 			print('!tag', tag)
 			print('!length', length)
@@ -438,5 +478,5 @@ class openPGP:
 ttt = '85010c03f7c1f4b58d60352a0108008dd909f507b10e2787c0a046ccbc3b81fca9267ab5d49065ada990789891a21246ea4bbdff21cd8d0bebba6160b7b5e964cc7ca69a02cd8a38333cc8e7c193c05810e9972c64eb170fb46481d82a8f8349a28f3391ab8cd79bd0c42c4dbb3a4c9f777275a62e218c9d8876463983c15c29e95f8962e04a9d581599478d78b5dd29394efafead8c683ad45c094dcce2426525c160ab87b1ef55b4343585657aac8d0477418f705dc77dfee0611c297e5b72ff9e858530885a37b634ed9fb6d4cebba46a937d3957f7d009107f3d1d90404c3f6481db9d4a626102abc36721c46b28841762a45f58330882d4f5e22989512daec1b8e89f867115caccb0de179783d24001805653862a53b4fef15a29427deed7b7e2940650e08a5e9fcc8cdeb03b0411e05dbf9ac2cc1a870aef75d30bc55992b3ab83bd8c5528819f6dc63100174ae7'
 ttt = binascii.unhexlify(ttt)
 # openPGP(ttt).ff()
-# openPGP(open("ml2.txt.gpg", "rb").read()).ff()
+openPGP(open("ml2.txt.gpg", "rb").read()).ff()
 openPGP(open("secretKey.asc", "rb").read()).ff()
