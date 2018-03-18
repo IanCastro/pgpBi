@@ -16,12 +16,6 @@ def powMod(b, e, mod):
 		e //= 2
 	return o
 
-class ClassName(object):
-	"""docstring for ClassName"""
-	def __init__(self, arg):
-		super(ClassName, self).__init__()
-		self.arg = arg
-		
 class openPGP:
 	# encodedFile = 'ac1562076d6c322e7478745a81a8444d4553534147450ad314549aadbc2b4bee2311e6b47ff06ada69b141b358'
 	# encodedFile = binascii.unhexlify(encodedFile)
@@ -295,7 +289,7 @@ class openPGP:
 			p += 4
 			# print(dateCreated.strftime('%H:%M:%S %d/%m/%Y'))
 			literalData = self.encodedFile[p:pEnd]
-			self.encodedFile = self.encodedFile[:p] + 'N' + self.encodedFile[p+1:]
+			# self.encodedFile = self.encodedFile[:p] + 'N' + self.encodedFile[p+1:]
 			p = pEnd
 			# print('literalData',literalData)
 			print('file:', fileName, dateCreated.strftime('%H:%M:%S %d/%m/%Y'), literalData)
