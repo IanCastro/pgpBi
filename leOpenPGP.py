@@ -337,6 +337,28 @@ class openPGP:
 		print userId
 		return pEnd
 
+	def SubPacket(self, p, pEnd):
+		dataSet = {}
+		while p != pEnd:
+			stOctet = ord(self.encodedFile[p]);
+			p += 1
+			# print('stOctet',stOctet)
+			if stOctet < 192:
+				length = stOctet
+			elif stOctet < 255:
+				ndOctet = ord(self.encodedFile[p]);
+				p += 1
+				length = (stOctet - 192 << 8) + ndOctet + 192
+			else:
+				length = self.toint(self.encodedFile[p: p + 4])
+				p += 4
+			subpacketType = ord(self.encodedFile[p]);
+			subpacketData = self.encodedFile[p+1: p+length];
+			p += length
+			# subpacketData = binascii.hexlify(subpacketData)
+			dataSet[subpacketType] = subpacketData
+		return dataSet
+
 	def SignaturePacket(self, p, pEnd):
 		# 5.2.  Signature Packet (Tag 2)
 		version = ord(self.encodedFile[p])
@@ -353,15 +375,20 @@ class openPGP:
 			p += 1
 			hashedSubpacketLen = self.toint(self.encodedFile[p: p+2])
 			p += 2
-			hashedSubpacket = self.encodedFile[p: p+hashedSubpacketLen]
+			# hashedSubpacket = self.encodedFile[p: p+hashedSubpacketLen]
+			# p += hashedSubpacketLen
+			# print 'hashedSubpacket',binascii.hexlify(hashedSubpacket)
+			hashedSubpacket = self.SubPacket(p, p+hashedSubpacketLen)
 			p += hashedSubpacketLen
-			print 'hashedSubpacket',binascii.hexlify(hashedSubpacket)
+			print hashedSubpacket
 			unhashedSubpacketLen = self.toint(self.encodedFile[p: p+2])
 			p += 2
-			unhashedSubpacket = self.encodedFile[p: p+unhashedSubpacketLen]
+			# unhashedSubpacket = self.encodedFile[p: p+unhashedSubpacketLen]
+			# p += unhashedSubpacketLen
+			# print 'unhashedSubpacket',binascii.hexlify(unhashedSubpacket)
+			unhashedSubpacket = self.SubPacket(p, p+unhashedSubpacketLen)
 			p += unhashedSubpacketLen
-			print 'unhashedSubpacket',binascii.hexlify(unhashedSubpacket)
-			# openPGP(unhashedSubpacket).ff()
+			print unhashedSubpacket
 			signedHashValue = self.toint(self.encodedFile[p: p+2])
 			p += 2
 			while p != pEnd:
@@ -395,6 +422,18 @@ class openPGP:
 			print('!length', length)
 			return p + length
 
+	def crc24(self, octets):
+		#6.1.  An Implementation of the CRC-24 in "C"
+		crc = CRC24_INIT = 0xB704CEL
+		CRC24_POLY = 0x1864CFBL
+		for x in octets:
+			crc ^= ord(x) << 16;
+			for i in xrange(8):
+				crc <<= 1;
+				if (crc & 0x1000000):
+					crc ^= CRC24_POLY;
+		return crc
+
 	def decodeAsc(self):
 		# p = 5
 		# headers = {'BEGIN PGP MESSAGE',
@@ -417,7 +456,21 @@ class openPGP:
 			q -= 1
 
 		self.encodedFile = base64.b64decode(''.join(xxd[p:q]))
-		# print binascii.hexlify(self.encodedFile)
+		crcFile = self.crc24(self.encodedFile)
+		if self.toint(base64.b64decode(xxd[q][1:])) != crcFile:
+			print 'corrupted file'
+			print 'crc24 on file',xxd[q][1:]
+			print 'crc24 calculeded',base64.b64encode(binascii.unhexlify(hex(crcFile)[2:-1]))
+			exit(1)
+		print '=:',xxd[q]
+		print '=:',base64.b64decode(xxd[q][1:])
+		print '=:',binascii.hexlify(base64.b64decode(xxd[q][1:]))
+		print '===:',self.toint(base64.b64decode(xxd[q][1:]))
+		print '===:',crcFile
+		# print binascii.hexlify(self.encodedFile)	
+		print 'crc:',hex(crcFile)[2:-1]
+		print 'crc:',base64.b64encode(hex(crcFile)[2:-1])
+		print 'crc2:',base64.b64encode(binascii.unhexlify(hex(crcFile)[2:-1]))
 
 	def ff(self):
 		# self.encodedFile = open("ml2.txt.decoded.gpg", "rb").read()
