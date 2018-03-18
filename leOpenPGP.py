@@ -16,8 +16,8 @@ def powMod(b, e, mod):
 	return o
 
 class openPGP:
-	ml2_txt_gpg = '85010c03f7c1f4b58d60352a0108008dd909f507b10e2787c0a046ccbc3b81fca9267ab5d49065ada990789891a21246ea4bbdff21cd8d0bebba6160b7b5e964cc7ca69a02cd8a38333cc8e7c193c05810e9972c64eb170fb46481d82a8f8349a28f3391ab8cd79bd0c42c4dbb3a4c9f777275a62e218c9d8876463983c15c29e95f8962e04a9d581599478d78b5dd29394efafead8c683ad45c094dcce2426525c160ab87b1ef55b4343585657aac8d0477418f705dc77dfee0611c297e5b72ff9e858530885a37b634ed9fb6d4cebba46a937d3957f7d009107f3d1d90404c3f6481db9d4a626102abc36721c46b28841762a45f58330882d4f5e22989512daec1b8e89f867115caccb0de179783d24001805653862a53b4fef15a29427deed7b7e2940650e08a5e9fcc8cdeb03b0411e05dbf9ac2cc1a870aef75d30bc55992b3ab83bd8c5528819f6dc63100174ae7'
-	ml2_txt_gpg = binascii.unhexlify(ml2_txt_gpg)
+	ml2_txt = 'ac1562076d6c322e7478745a81a8444d4553534147450ad314549aadbc2b4bee2311e6b47ff06ada69b141b358'
+	ml2_txt = binascii.unhexlify(ml2_txt)
 
 
 
@@ -34,9 +34,9 @@ class openPGP:
 		return str[::-1]
 
 	def leMPI(self, p):
-		length = (self.toint(self.ml2_txt_gpg[p: p + 2]) + 7) / 8
+		length = (self.toint(self.ml2_txt[p: p + 2]) + 7) / 8
 		p += 2
-		mpi = self.ml2_txt_gpg[p: p + length]
+		mpi = self.ml2_txt[p: p + length]
 		p += length
 		return (p, mpi)
 
@@ -68,7 +68,7 @@ class openPGP:
 		return hd[:bs]
 
 	def printgpg(self, p, t):
-		print(binascii.hexlify(self.ml2_txt_gpg[p:p+t]))
+		print(binascii.hexlify(self.ml2_txt[p:p+t]))
 
 	def leSecretData(self, passphrase, symEncAlgo, salt, coded, encrData, IV):
 		bs = self.blockSize(symEncAlgo)
@@ -98,31 +98,31 @@ class openPGP:
 	def secretKeyPaket(self, p, pEnd):
 		#5.5.3.  Secret-Key Packet Formats
 		p = self.publicKeyPaket(p)
-		s2kConventions = ord(self.ml2_txt_gpg[p])
+		s2kConventions = ord(self.ml2_txt[p])
 		p += 1
 		if s2kConventions == 254 or s2kConventions == 255:
-			symEncAlgo = ord(self.ml2_txt_gpg[p])
+			symEncAlgo = ord(self.ml2_txt[p])
 			self.printgpg(p, 1)
 			p += 1
 			#9.2.  Symmetric-Key Algorithms
-			s2k = ord(self.ml2_txt_gpg[p])
+			s2k = ord(self.ml2_txt[p])
 			self.printgpg(p, 1)
 			p += 1
 			#3.7.1.  String-to-Key (S2K) Specifier Types
-			hashAlgo = ord(self.ml2_txt_gpg[p])
+			hashAlgo = ord(self.ml2_txt[p])
 			self.printgpg(p, 1)
 			p += 1
-			salt = self.ml2_txt_gpg[p: p + 8]
+			salt = self.ml2_txt[p: p + 8]
 			self.printgpg(p, 8)
 			p += 8
-			coded = ord(self.ml2_txt_gpg[p])
+			coded = ord(self.ml2_txt[p])
 			self.printgpg(p, 1)
 			p += 1
 			bs = self.blockSize(symEncAlgo)
-			IV = self.ml2_txt_gpg[p: p + bs]
+			IV = self.ml2_txt[p: p + bs]
 			self.printgpg(p, bs)
 			p += bs
-			encrData = self.ml2_txt_gpg[p: pEnd]
+			encrData = self.ml2_txt[p: pEnd]
 			p = pEnd
 
 			self.leSecretData('this is a pass', symEncAlgo, salt, coded, encrData, IV)
@@ -139,16 +139,16 @@ class openPGP:
 			
 	def publicKeyPaket(self, p):
 		#5.5.2.  Public-Key Packet Formats
-		version = ord(self.ml2_txt_gpg[p])
+		version = ord(self.ml2_txt[p])
 		p += 1
 		print('v',version)
 		if version == 3:
 			print'''5.5.2.  Public-Key Packet Formats //version 3'''
 		elif version == 4:
-			dateCreated = datetime.fromtimestamp(self.toint(self.ml2_txt_gpg[p: p+4]))
+			dateCreated = datetime.fromtimestamp(self.toint(self.ml2_txt[p: p+4]))
 			p += 4
 			print(dateCreated.strftime('%H:%M:%S %d/%m/%Y'))
-			publicKeyAlgo = ord(self.ml2_txt_gpg[p])
+			publicKeyAlgo = ord(self.ml2_txt[p])
 			p += 1
 			#9.1.  Public-Key Algorithms
 			if publicKeyAlgo == 1 or publicKeyAlgo == 2 or publicKeyAlgo == 3:
@@ -173,13 +173,13 @@ class openPGP:
 
 	def Public_Key_Encrypted_Session_Key_Packets(self, p):
 		#5.1.  Public-Key Encrypted Session Key Packets (Tag 1)
-		version = ord(self.ml2_txt_gpg[p])
+		version = ord(self.ml2_txt[p])
 		p += 1
 		print('v',version)
 		if version == 3:
-			keyId = self.ml2_txt_gpg[p: p + 8]
+			keyId = self.ml2_txt[p: p + 8]
 			p += 8
-			publicKeyAlgo = ord(self.ml2_txt_gpg[p])
+			publicKeyAlgo = ord(self.ml2_txt[p])
 			p += 1
 			#9.1.  Public-Key Algorithms
 			if publicKeyAlgo == 1 or publicKeyAlgo == 2 or publicKeyAlgo == 3:
@@ -223,22 +223,46 @@ class openPGP:
 
 	def SymEncryptedIntegrityProtectedDataPacket(self, p, pEnd):
 		#5.13.  Sym. Encrypted Integrity Protected Data Packet (Tag 18)
-		version = ord(self.ml2_txt_gpg[p])
+		version = ord(self.ml2_txt[p])
 		p += 1
 		print('v',version)
 		if version == 1:
-			encrData = self.ml2_txt_gpg[p: pEnd]
+			encrData = self.ml2_txt[p: pEnd]
 			p = pEnd
 			key = '4bcb9206f7b3064d15f83c8f1399c4367a6bf57251ee1f5d2a19a4abcef34659'
 			key = binascii.unhexlify(key)
 			encrData += '0'*1
 			data = AES.new(key, AES.MODE_CFB, chr(0)*16, segment_size = 128).decrypt(encrData)[:-1]
-			print 'data full',binascii.hexlify(data)
+			print binascii.hexlify(data)
 			if data[14:16] == data[16:18]:
 				data = data[18:]
-				print 'data fim',binascii.hexlify(data)
+				print binascii.hexlify(data)
 		else:
 			print 'Sym. Encrypted Integrity Protected Data Packet version must be 1'
+			exit(1)
+		return p
+
+	def LiteralDataPacket(self, p, pEnd):
+		#5.9.  Literal Data Packet (Tag 11)
+		formatted = self.ml2_txt[p]
+		p += 1
+		print('formatted',formatted)
+		if formatted == 'b':
+			fileNameLen = ord(self.ml2_txt[p])
+			p += 1
+			fileName = self.ml2_txt[p:p+fileNameLen]
+			p += fileNameLen
+			print('fileName',fileName)
+			if fileName == "_CONSOLE":
+				print'''5.9.  Literal Data Packet (Tag 11)//for your eyes only'''
+			dateCreated = datetime.fromtimestamp(self.toint(self.ml2_txt[p: p+4]))
+			p += 4
+			print(dateCreated.strftime('%H:%M:%S %d/%m/%Y'))
+			literalData = self.ml2_txt[p:pEnd]
+			p = pEnd
+			print('literalData',literalData)
+		else:
+			print "Literal Data Packet must be formatted with 'b', 't' or 'u'"
 			exit(1)
 		return p
 
@@ -252,15 +276,17 @@ class openPGP:
 			return self.Public_Key_Encrypted_Session_Key_Packets(p)
 		elif tag == 18:
 			return self.SymEncryptedIntegrityProtectedDataPacket(p, p+length)
+		elif tag == 11:
+			return self.LiteralDataPacket(p, p+length)
 		else:
 			print('!tag', tag)
 			return p + length
 
 	def ff(self):
 		p = 0
-		while(p < len(self.ml2_txt_gpg)):
-			print(p,len(self.ml2_txt_gpg))
-			pTag = ord(self.ml2_txt_gpg[p])
+		while(p < len(self.ml2_txt)):
+			print(p,len(self.ml2_txt))
+			pTag = ord(self.ml2_txt[p])
 			p += 1
 			print('pTag',pTag)
 			one = pTag & 128#1<<7
@@ -270,18 +296,18 @@ class openPGP:
 			newFormat = pTag & 64#1<<6
 			if newFormat:
 				tag = pTag & 63#(1<<6)-1
-				stOctet = ord(self.ml2_txt_gpg[p]);
+				stOctet = ord(self.ml2_txt[p]);
 				p += 1
 				print('stOctet',stOctet)
 				if stOctet < 192:
 					length = stOctet
 				elif stOctet < 224:
-					ndOctet = ord(self.ml2_txt_gpg[p]);
+					ndOctet = ord(self.ml2_txt[p]);
 					p += 1
 					length = (stOctet - 192 << 8) + ndOctet + 192
 				elif stOctet == 255:
-					#length = reduce(lambda x,y:x*256+ord(y), self.ml2_txt_gpg[p: p + 4], 0)
-					length = self.toint(self.ml2_txt_gpg[p: p + 4])
+					#length = reduce(lambda x,y:x*256+ord(y), self.ml2_txt[p: p + 4], 0)
+					length = self.toint(self.ml2_txt[p: p + 4])
 					p += 4
 				else:
 					print'''4.2.2.4.  Partial Body Lengths'''
@@ -290,14 +316,14 @@ class openPGP:
 				lenType = pTag & 3#(1<<2)-1
 				#print('lenType',lenType)
 				if lenType < 3:
-					#length = reduce(lambda x,y:x*256+ord(y), self.ml2_txt_gpg[p: p + (1<<lenType)], 0)
-					length = self.toint(self.ml2_txt_gpg[p: p + (1<<lenType)])
+					#length = reduce(lambda x,y:x*256+ord(y), self.ml2_txt[p: p + (1<<lenType)], 0)
+					length = self.toint(self.ml2_txt[p: p + (1<<lenType)])
 					p += (1<<lenType)
 				else:
 					print'''4.2.1.  Old Format Packet Lengths// 3 - The packet is of indeterminate length'''
 
 
-			print('one',one)
+			#print('one',one)
 			print('newFormat',newFormat)
 			print('tag',tag)
 			print('length',length)
@@ -305,7 +331,7 @@ class openPGP:
 
 		print()
 		print(p)
-		print(len(self.ml2_txt_gpg))
+		print(len(self.ml2_txt))
 
 ff = openPGP()
 ff.ff()
