@@ -3,7 +3,7 @@ from datetime import datetime
 import hashlib
 from Crypto.Cipher import AES
 import base64
-
+import zlib
 
 def powMod(b, e, mod):
 	#print('e', e)
@@ -158,7 +158,7 @@ class openPGP:
 		#5.5.2.  Public-Key Packet Formats//tag == 6 or tag == 14
 		version = ord(self.encodedFile[p])
 		p += 1
-		# print('v',version)
+		# print('version',version)
 		if version == 3:
 			print'''5.5.2.  Public-Key Packet Formats //version 3'''
 		elif version == 4:
@@ -192,7 +192,7 @@ class openPGP:
 		#5.1.  Public-Key Encrypted Session Key Packets (Tag 1)
 		version = ord(self.encodedFile[p])
 		p += 1
-		# print('v',version)
+		# print('version',version)
 		if version == 3:
 			keyId = self.encodedFile[p: p + 8]
 			p += 8
@@ -249,7 +249,7 @@ class openPGP:
 		# self.printgpg(p,pEnd)
 		version = ord(self.encodedFile[p])
 		p += 1
-		#print('v',version)
+		#print('version',version)
 		if version == 1:
 			encrData = self.encodedFile[p: pEnd]
 			p = pEnd
@@ -295,7 +295,7 @@ class openPGP:
 			p += 4
 			# print(dateCreated.strftime('%H:%M:%S %d/%m/%Y'))
 			literalData = self.encodedFile[p:pEnd]
-			# self.bbencodedFile = self.encodedFile[:p] + 'N' + self.encodedFile[p+1:]
+			self.encodedFile = self.encodedFile[:p] + 'N' + self.encodedFile[p+1:]
 			p = pEnd
 			# print('literalData',literalData)
 			print('file:', fileName, dateCreated.strftime('%H:%M:%S %d/%m/%Y'), literalData)
@@ -328,7 +328,9 @@ class openPGP:
 		# 	print False
 		sha = hashlib.sha1(self.extraParam + self.encodedFile[:p]).digest()
 		if sha != self.encodedFile[p:]:
-			print'Detected Modification on Packet'
+			print binascii.hexlify(sha)
+			print binascii.hexlify(self.encodedFile[p:])
+			print'>>>>>>>>>>>>>>>>>>>> Detected Modification on Packet <<<<<<<<<<<<<<<<<<<<'
 			exit(1)
 		else:
 			'''coment'''
@@ -373,7 +375,7 @@ class openPGP:
 		# 5.2.  Signature Packet (Tag 2)
 		version = ord(self.encodedFile[p])
 		p += 1
-		print('v',version)
+		# print('version',version)
 		if version == 3:
 			print'''5.2.2.  Version 3 Signature Packet Format'''
 		elif version == 4:
@@ -390,7 +392,7 @@ class openPGP:
 			# print 'hashedSubpacket',binascii.hexlify(hashedSubpacket)
 			hashedSubpacket = self.SubPacket(p, p+hashedSubpacketLen)
 			p += hashedSubpacketLen
-			print hashedSubpacket
+			print('hashedSubpacket', hashedSubpacket)
 			unhashedSubpacketLen = self.toint(self.encodedFile[p: p+2])
 			p += 2
 			# unhashedSubpacket = self.encodedFile[p: p+unhashedSubpacketLen]
@@ -398,7 +400,7 @@ class openPGP:
 			# print 'unhashedSubpacket',binascii.hexlify(unhashedSubpacket)
 			unhashedSubpacket = self.SubPacket(p, p+unhashedSubpacketLen)
 			p += unhashedSubpacketLen
-			print unhashedSubpacket
+			print('unhashedSubpacket', unhashedSubpacket)
 			signedHashValue = self.toint(self.encodedFile[p: p+2])
 			p += 2
 			while p != pEnd:
@@ -408,6 +410,27 @@ class openPGP:
 			print 'Signature Packet version must be 3 or 4'
 			exit(1)
 		return p
+
+	def CompressedDataPacket(self, p, pEnd):
+		# 5.6.  Compressed Data Packet (Tag 8)
+		compressAlgo = ord(self.encodedFile[p])
+		p += 1
+		#9.3.  Compression Algorithms
+		if compressAlgo == 1:
+			#zip
+			decompressedFile = zlib.decompress(self.encodedFile[p: pEnd], -15)
+			openPGP(decompressedFile).ff()
+		elif compressAlgo == 2:
+			print'''9.3.  Compression Algorithms: zlib'''
+			#zlib
+		elif compressAlgo == 3:
+			print'''9.3.  Compression Algorithms bzip2'''
+			#bzip2
+		else:
+			print('compressAlgo',compressAlgo,'not suported')
+			exit(1)
+		return pEnd
+
 
 	def leTag(self, tag, p, length):
 		# print('tag', tag)
@@ -427,6 +450,8 @@ class openPGP:
 			return self.UserIDPacket(p, p+length)
 		elif tag == 2:
 			return self.SignaturePacket(p, p+length)
+		elif tag == 8:
+			return self.CompressedDataPacket(p, p+length)
 		else:
 			print('!tag', tag)
 			print('!length', length)
@@ -493,6 +518,7 @@ class openPGP:
 		# print 'crc:',hex(crcFile)[2:-1]
 		# print 'crc:',base64.b64encode(hex(crcFile)[2:-1])
 		# print 'crc2:',base64.b64encode(binascii.unhexlify(hex(crcFile)[2:-1]))
+		return self
 
 	def ff(self):
 		# self.encodedFile = open("ml2.txt.decoded.gpg", "rb").read()
@@ -528,6 +554,7 @@ class openPGP:
 					p += 4
 				else:
 					print'''4.2.2.4.  Partial Body Lengths'''
+					exit(1)
 			else:
 				tag = (pTag & 63) >> 2#(tag & (1<<6)-1) >> 2
 				lenType = pTag & 3#(1<<2)-1
@@ -537,7 +564,9 @@ class openPGP:
 					length = self.toint(self.encodedFile[p: p + (1<<lenType)])
 					p += (1<<lenType)
 				else:
-					print'''4.2.1.  Old Format Packet Lengths// 3 - The packet is of indeterminate length'''
+					#print'''4.2.1.  Old Format Packet Lengths// 3 - The packet is of indeterminate length'''
+					#exit(1)
+					length = len(self.encodedFile) - p
 
 
 			#print('one',one)
@@ -546,18 +575,22 @@ class openPGP:
 			#print('length',length)
 			p = self.leTag(tag, p, length)
 
-		self.encodeAsc()
-		print self.encodedFile
 		# print()
 		# print(p)
 		# print(len(self.encodedFile))
 		print'==',p == len(self.encodedFile)
 
+		# self.encodeAsc()
+		# print self.encodedFile
+		return self
+
 # openPGP(open("ml2.txt.decoded.gpg", "rb").read()).ff()
 ttt = '85010c03f7c1f4b58d60352a0108008dd909f507b10e2787c0a046ccbc3b81fca9267ab5d49065ada990789891a21246ea4bbdff21cd8d0bebba6160b7b5e964cc7ca69a02cd8a38333cc8e7c193c05810e9972c64eb170fb46481d82a8f8349a28f3391ab8cd79bd0c42c4dbb3a4c9f777275a62e218c9d8876463983c15c29e95f8962e04a9d581599478d78b5dd29394efafead8c683ad45c094dcce2426525c160ab87b1ef55b4343585657aac8d0477418f705dc77dfee0611c297e5b72ff9e858530885a37b634ed9fb6d4cebba46a937d3957f7d009107f3d1d90404c3f6481db9d4a626102abc36721c46b28841762a45f58330882d4f5e22989512daec1b8e89f867115caccb0de179783d24001805653862a53b4fef15a29427deed7b7e2940650e08a5e9fcc8cdeb03b0411e05dbf9ac2cc1a870aef75d30bc55992b3ab83bd8c5528819f6dc63100174ae7'
 ttt = binascii.unhexlify(ttt)
 # openPGP(ttt).ff()
-# openPGP(open("ml2.txt.gpg", "rb").read()).ff()
+openPGP(open("ml2.txt.gpg", "rb").read()).ff()
 # openPGP(open("secretKey.asc", "rb").read()).ff()
+# openPGP(open("compressZip.gpg", "rb").read()).ff()
 # print openPGP(open("ml2.txt.gpg", "rb").read()).encodeAsc().encodedFile
-# print openPGP(open("m.txt.asc", "rb").read()).ff()
+# print openPGP(open("m.txt.asc", "rb").read()).ff().encodeAsc().encodedFile
+# print openPGP(open("m.txt.asc", "rb").read()).ff().ff()
