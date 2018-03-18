@@ -2,6 +2,7 @@ import binascii
 from datetime import datetime
 import hashlib
 from Crypto.Cipher import AES
+import base64
 
 
 def powMod(b, e, mod):
@@ -24,8 +25,9 @@ class ClassName(object):
 class openPGP:
 	# encodedFile = 'ac1562076d6c322e7478745a81a8444d4553534147450ad314549aadbc2b4bee2311e6b47ff06ada69b141b358'
 	# encodedFile = binascii.unhexlify(encodedFile)
-	def __init__(self, arg):
+	def __init__(self, arg, arg2 = None):
 		self.encodedFile = arg
+		self.extraParam = arg2
 
 
 	def toint(self, str256):
@@ -64,9 +66,9 @@ class openPGP:
 	def makeKey(self, salt, coded, bs, passphrase):
 		#3.7.1.3.  Iterated and Salted S2K
 		count = (16 + (coded & 15)) << ((coded >> 4) + 6);
-		print'count',count
+		# print'count',count
 		comb = salt+passphrase
-		print'comb',binascii.hexlify(comb)
+		# print'comb',binascii.hexlify(comb)
 		while len(comb) < count:
 			comb += comb
 		comb = comb[:count]
@@ -92,10 +94,11 @@ class openPGP:
 		#print'pRSA',binascii.hexlify(pRSA)
 		#print'qRSA',binascii.hexlify(qRSA)
 		#print'uRSA',binascii.hexlify(uRSA)
-		if hashlib.sha1(data[:p]).digest() == data[p:]:
-			print'pass'
+		if hashlib.sha1(data[:p]).digest() != data[p:]:
+			print'passphrase incorrect'
 		else:
-			print'not pass'
+			# print'pass'
+			'''coment'''
 
 		
 		#print'sha1',hashlib.sha1(data[:p]).hexdigest()
@@ -103,31 +106,31 @@ class openPGP:
 
 
 	def secretKeyPaket(self, p, pEnd):
-		#5.5.3.  Secret-Key Packet Formats
+		#5.5.3.  Secret-Key Packet Formats//tag == 5 or tag == 7
 		p = self.publicKeyPaket(p)
 		s2kConventions = ord(self.encodedFile[p])
 		p += 1
 		if s2kConventions == 254 or s2kConventions == 255:
 			symEncAlgo = ord(self.encodedFile[p])
-			self.printgpg(p, 1)
+			# self.printgpg(p, 1)
 			p += 1
 			#9.2.  Symmetric-Key Algorithms
 			s2k = ord(self.encodedFile[p])
-			self.printgpg(p, 1)
+			# self.printgpg(p, 1)
 			p += 1
 			#3.7.1.  String-to-Key (S2K) Specifier Types
 			hashAlgo = ord(self.encodedFile[p])
-			self.printgpg(p, 1)
+			# self.printgpg(p, 1)
 			p += 1
 			salt = self.encodedFile[p: p + 8]
-			self.printgpg(p, 8)
+			# self.printgpg(p, 8)
 			p += 8
 			coded = ord(self.encodedFile[p])
-			self.printgpg(p, 1)
+			# self.printgpg(p, 1)
 			p += 1
 			bs = self.blockSize(symEncAlgo)
 			IV = self.encodedFile[p: p + bs]
-			self.printgpg(p, bs)
+			# self.printgpg(p, bs)
 			p += bs
 			encrData = self.encodedFile[p: pEnd]
 			p = pEnd
@@ -145,10 +148,10 @@ class openPGP:
 
 			
 	def publicKeyPaket(self, p):
-		#5.5.2.  Public-Key Packet Formats
+		#5.5.2.  Public-Key Packet Formats//tag == 6 or tag == 14
 		version = ord(self.encodedFile[p])
 		p += 1
-		print('v',version)
+		# print('v',version)
 		if version == 3:
 			print'''5.5.2.  Public-Key Packet Formats //version 3'''
 		elif version == 4:
@@ -234,6 +237,7 @@ class openPGP:
 
 	def SymEncryptedIntegrityProtectedDataPacket(self, p, pEnd):
 		#5.13.  Sym. Encrypted Integrity Protected Data Packet (Tag 18)
+		# self.printgpg(p,pEnd)
 		version = ord(self.encodedFile[p])
 		p += 1
 		#print('v',version)
@@ -254,11 +258,11 @@ class openPGP:
 			else :
 				print'''Not Implemented yet'''
 				exit(1)
-			#print 'data full',binascii.hexlify(data)
+			# print 'data full',binascii.hexlify(data)
 			if data[14:16] == data[16:18]:
-				data = data[18:]
-				print 'data fim',binascii.hexlify(data)
-				openPGP(data).ff()
+				#data = data[18:]
+				print 'data fim',binascii.hexlify(data[:18]),binascii.hexlify(data[18:])
+				openPGP(data[18:], data[:18]).ff()
 		else:
 			print 'Sym. Encrypted Integrity Protected Data Packet version must be 1'
 			exit(1)
@@ -290,7 +294,48 @@ class openPGP:
 		return p
 
 
+	def ModificationDetectionCodePacket(self, p):
+		#5.14.  Modification Detection Code Packet (Tag 19)
+		# tex = 'MESSAGE\n'
+		# tex = binascii.unhexlify('ac1562076d6c322e7478745a81a8444d4553534147450a')
+		# print(hashlib.sha1(tex).hexdigest())
+		# tex = binascii.unhexlify('85010c03f7c1f4b58d60352a0108008dd909f507b10e2787c0a046ccbc3b81fca9267ab5d49065ada990789891a21246ea4bbdff21cd8d0bebba6160b7b5e964cc7ca69a02cd8a38333cc8e7c193c05810e9972c64eb170fb46481d82a8f8349a28f3391ab8cd79bd0c42c4dbb3a4c9f777275a62e218c9d8876463983c15c29e95f8962e04a9d581599478d78b5dd29394efafead8c683ad45c094dcce2426525c160ab87b1ef55b4343585657aac8d0477418f705dc77dfee0611c297e5b72ff9e858530885a37b634ed9fb6d4cebba46a937d3957f7d009107f3d1d90404c3f6481db9d4a626102abc36721c46b28841762a45f58330882d4f5e22989512daec1b8e89f867115caccb0de179783d24001805653862a53b4fef15a29427deed7b7e2940650e08a5e9fcc8cdeb03b0411e05dbf9ac2cc1a870aef75d30bc55992b3ab83bd8c5528819f6dc63100174ae7')
+		# tex = ttt
+		# tex = binascii.unhexlify('62a59b039fd0577cb0ff56c38652b977b977ac1562076d6c322e7478745a81a8444d4553534147450ad314549aadbc2b4bee2311e6b47ff06ada69b141b358')
+		# print len(tex)
+		# for i in xrange(len(tex)+1):
+		# 	for j in xrange(i+1):
+		# 		sha = hashlib.sha1(tex[j:i]).hexdigest()
+		# 		print(sha)
+		# 		if '549aadbc2b4bee2311e6b47ff06ada69b141b358' == sha:
+		# 			print(i, j)
+		# 			break
+		# 	else:
+		# 		continue
+		# 	break
+		# else:
+		# 	print False
+		sha = hashlib.sha1(self.extraParam + self.encodedFile[:p]).digest()
+		if sha != self.encodedFile[p:]:
+			print'Detected Modification on Packet'
+			exit(1)
+		else:
+			'''coment'''
+			# print'pass MDP'
+			# print(binascii.hexlify(self.encodedFile[p:]))
+			# print(binascii.hexlify(sha))
+		# print('binascii.hexlify(self.encodedFile[:p])')
+		# print(binascii.hexlify(self.encodedFile[:p]))
+		# print(hashlib.sha1().hexdigest())
+		# print(sha)
+		return p+20
+
+	def UserIDPacket(self, p, pEnd):
+		# 5.11.  User ID Packet (Tag 13)
+		return pEnd
+
 	def leTag(self, tag, p, length):
+		# print('tag', tag)
 		if(tag == 5 or tag == 7):
 			return self.secretKeyPaket(p, p+length)
 		elif tag == 6 or tag == 14:
@@ -302,15 +347,42 @@ class openPGP:
 		elif tag == 11:
 			return self.LiteralDataPacket(p, p+length)
 		elif tag == 19:
-			return self.LiteralDataPacket(p, p+length)
+			return self.ModificationDetectionCodePacket(p)
+		elif tag == 13:
+			return self.UserIDPacket(p, p+length)
 		else:
 			print('!tag', tag)
 			print('!length', length)
 			return p + length
 
+	def decodeAsc(self):
+		# p = 5
+		# headers = {'BEGIN PGP MESSAGE',
+		# 'BEGIN PGP PUBLIC KEY BLOCK',
+		# 'BEGIN PGP PRIVATE KEY BLOCK',
+		# 'BEGIN PGP MESSAGE, PART X/Y',
+		# 'BEGIN PGP MESSAGE, PART X',
+		# 'BEGIN PGP SIGNATURE'}
+		# for h in headers:
+		# 	if self.encodedFile[p: p+len(h)] == h:
+		# 		# print h
+		# 		p += len(h)+6
+		xxd = self.encodedFile.split('\n')
+		p = 0
+		while xxd[p].strip() != '':
+			p += 1
+		p += 1
+		q = len(xxd) - 1
+		while len(xxd[q]) == 0 or xxd[q][0] != '=':
+			q -= 1
+
+		self.encodedFile = base64.b64decode(''.join(xxd[p:q]))
+		# print binascii.hexlify(self.encodedFile)
+
 	def ff(self):
 		# self.encodedFile = open("ml2.txt.decoded.gpg", "rb").read()
-
+		if self.encodedFile[0] == '-':
+			self.decodeAsc()
 		p = 0
 		while(p < len(self.encodedFile)):
 			# print(p,len(self.encodedFile))
@@ -360,6 +432,11 @@ class openPGP:
 		# print()
 		# print(p)
 		# print(len(self.encodedFile))
+		print'==',p == len(self.encodedFile)
 
 # openPGP(open("ml2.txt.decoded.gpg", "rb").read()).ff()
-openPGP(open("ml2.txt.gpg", "rb").read()).ff()
+ttt = '85010c03f7c1f4b58d60352a0108008dd909f507b10e2787c0a046ccbc3b81fca9267ab5d49065ada990789891a21246ea4bbdff21cd8d0bebba6160b7b5e964cc7ca69a02cd8a38333cc8e7c193c05810e9972c64eb170fb46481d82a8f8349a28f3391ab8cd79bd0c42c4dbb3a4c9f777275a62e218c9d8876463983c15c29e95f8962e04a9d581599478d78b5dd29394efafead8c683ad45c094dcce2426525c160ab87b1ef55b4343585657aac8d0477418f705dc77dfee0611c297e5b72ff9e858530885a37b634ed9fb6d4cebba46a937d3957f7d009107f3d1d90404c3f6481db9d4a626102abc36721c46b28841762a45f58330882d4f5e22989512daec1b8e89f867115caccb0de179783d24001805653862a53b4fef15a29427deed7b7e2940650e08a5e9fcc8cdeb03b0411e05dbf9ac2cc1a870aef75d30bc55992b3ab83bd8c5528819f6dc63100174ae7'
+ttt = binascii.unhexlify(ttt)
+# openPGP(ttt).ff()
+# openPGP(open("ml2.txt.gpg", "rb").read()).ff()
+openPGP(open("secretKey.asc", "rb").read()).ff()
