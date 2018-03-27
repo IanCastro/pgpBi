@@ -652,9 +652,39 @@ class openPGP:
 			exit(1)
 		return pEnd
 
+	def read_One_Pass_Signature_Packets(self, p):
+		# 5.4.  One-Pass Signature Packets (Tag 4)
+		pv = p
+		version = ord(self.encodedFile[p])
+		p += 1
+		if version == 3:
+			signatureType = ord(self.encodedFile[p])
+			#5.2.1.  Signature Types
+			p += 1
+
+			hashAlgo = ord(self.encodedFile[p])
+			p += 1
+
+			publicKeyAlgo = ord(self.encodedFile[p])
+			p += 1
+
+			keyId = self.encodedFile[p: p + 8]
+			p += 8
+
+			flagAnotherOnePass = ord(self.encodedFile[p])
+			p += 1
+
+			if flagAnotherOnePass == 0:
+				print ''' 5.4.  One-Pass Signature Packets (Tag 4) '''
+				exit(1)
+			# else:
+		else:
+			print '>>> One-Pass Signature Packets version must be 3 <<<'
+			exit(1)
+		return p
 
 	def readTag(self, tag, p, length):
-		print('tag', tag)
+		print('tag:', tag)
 		if tag == 5 or tag == 7:
 			return self.read_secretKeyPaket(p, p+length)
 		elif tag == 6 or tag == 14:
@@ -673,8 +703,10 @@ class openPGP:
 			return self.read_SignaturePacket(p, p+length)
 		elif tag == 8:
 			return self.read_CompressedDataPacket(p, p+length)
+		elif tag == 4:
+			return self.read_One_Pass_Signature_Packets(p)
 		else:
-			print('!tag', tag)
+			print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!tag', tag)
 			print('!length', length)
 			return p + length
 
@@ -877,8 +909,9 @@ ttt = binascii.unhexlify(ttt)
 # openPGP(open("Example.asc", "rb").read()).ff()
 # print binascii.hexlify(open("file.txt", "r").read())
 
-secretKeyFile = open("secretKey.asc", "rb").read()
-messageFile = open("ml2.txt.gpg", "rb").read()
-# openPGP().ff(secretKeyFile).ff(messageFile)
-print openPGP().ff(secretKeyFile).ff2([1, 18]).encodeAsc().savefile("file.txt.asc").encodedFile
-openPGP().ff(secretKeyFile).ff(open("file.txt.asc", "rb").read())
+# secretKeyFile = open("secretKey.asc", "rb").read()
+# messageFile = open("ml2.txt.gpg", "rb").read()
+# # openPGP().ff(secretKeyFile).ff(messageFile)
+# print openPGP().ff(secretKeyFile).ff2([1, 18]).encodeAsc().savefile("file.txt.asc").encodedFile
+# openPGP().ff(secretKeyFile).ff(open("file.txt.asc", "rb").read())
+print binascii.hexlify(openPGP().ff(open("file2.txt.asc", "rb").read()).encodedFile)
