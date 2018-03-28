@@ -168,9 +168,12 @@ class s2kOpenPGP:
 
 class secretKeyOpenPGP:
 	def __init__(self, publicKey, symEncAlgo, s2k, encrData, IV):
-		self.nRSA = Util.toint(publicKey[0])
-		self.messegeLen = len(publicKey[0])
-		self.eRSA = Util.toint(publicKey[1])
+		# print('nrsa:',binascii.hexlify(publicKey[0]))
+		# print('ersa:',binascii.hexlify(publicKey[1]))
+		self.fingerPrint = publicKey[0]
+		self.nRSA = Util.toint(publicKey[1])
+		self.messegeLen = len(publicKey[1])
+		self.eRSA = Util.toint(publicKey[2])
 		self.symEncAlgo = symEncAlgo
 		self.s2k = s2k
 		self.IV = IV
@@ -277,6 +280,7 @@ class openPGP:
 
 	def read_publicKeyPaket(self, p):
 		#5.5.2.  Public-Key Packet Formats//Tag 6 or Tag 14
+		p0 = p;
 		version = ord(self.encodedFile[p])
 		p += 1
 		# print('version',version)
@@ -294,7 +298,12 @@ class openPGP:
 				#rsa
 				p, nRSA = Util.leMPI(self.encodedFile, p)
 				p, eRSA = Util.leMPI(self.encodedFile, p)
-				self.publicKeys.append((nRSA, eRSA));
+				# print 'eRSA',binascii.hexlify(eRSA)
+				# print '99',binascii.hexlify(Util.int2str256(p-p0,2)),binascii.hexlify(self.encodedFile[p0:p])
+				fingerPrint = chr(0x99) +  Util.int2str256(p-p0,2) + self.encodedFile[p0:p]
+				fingerPrint = hashlib.sha1(fingerPrint).digest()
+				print('fingerPrint pk',binascii.hexlify(fingerPrint))
+				self.publicKeys.append((fingerPrint, nRSA, eRSA))
 				#print(eRSA, mpi)
 			elif publicKeyAlgo == 16:
 				#Elgamal
@@ -343,8 +352,10 @@ class openPGP:
 				# MM = Util.powMod(mRSA, dRSA, nRSA)
 				# MM = Util.int2str256(MM)
 
-				for keys in self.secretKeys:
-					MM = keys.decodeRSA(mRSA, 'this is a pass')
+				for key in self.secretKeys:
+					if key.fingerPrint[-8:] != keyId:
+						continue
+					MM = key.decodeRSA(mRSA, 'this is a pass')
 					# MM = self.secretKeys[0].decodeRSA(mRSA, 'this is a pass')
 					# MM = MM[MM.find(chr(0)):]
 					MM = Util.EME_PKCS1_v1_5_DECODE(MM)
@@ -669,6 +680,7 @@ class openPGP:
 			p += 1
 
 			keyId = self.encodedFile[p: p + 8]
+			print 'keyId', binascii.hexlify(keyId)
 			p += 8
 
 			flagAnotherOnePass = ord(self.encodedFile[p])
@@ -902,16 +914,9 @@ ttt = binascii.unhexlify(ttt)
 # 	print ''
 # 	print ''
 
-# openPGP(open("compressZip.gpg", "rb").read()).ff()
-# print openPGP(open("ml2.txt.gpg", "rb").read()).encodeAsc().encodedFile
-# print openPGP(open("m.txt.asc", "rb").read()).ff().encodeAsc().encodedFile
-# print openPGP(open("m.txt.asc", "rb").read()).ff().ff()
-# openPGP(open("Example.asc", "rb").read()).ff()
-# print binascii.hexlify(open("file.txt", "r").read())
-
-# secretKeyFile = open("secretKey.asc", "rb").read()
-# messageFile = open("ml2.txt.gpg", "rb").read()
-# # openPGP().ff(secretKeyFile).ff(messageFile)
+secretKeyFile = open("secretKey.asc", "rb").read()
+messageFile = open("ml2.txt.gpg", "rb").read()
+openPGP().ff(secretKeyFile).ff(messageFile)
 # print openPGP().ff(secretKeyFile).ff2([1, 18]).encodeAsc().savefile("file.txt.asc").encodedFile
 # openPGP().ff(secretKeyFile).ff(open("file.txt.asc", "rb").read())
-print binascii.hexlify(openPGP().ff(open("file2.txt.asc", "rb").read()).encodedFile)
+# print binascii.hexlify(openPGP().ff(open("file2.txt.asc", "rb").read()).encodedFile)
