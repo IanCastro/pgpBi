@@ -6,6 +6,8 @@ import base64
 import zlib
 import random
 
+podeModificar = False
+
 class MyException(Exception):
     pass
 
@@ -106,8 +108,9 @@ class Util:
 
 	@staticmethod
 	def int2str256(longInt, length):
-		if longInt == 0:
-			return chr(0)
+		return binascii.unhexlify("{0:0{1}x}".format(longInt, length*2));
+		# if longInt == 0:
+		# 	return chr(0)
 		str = ''
 		# while longInt > 0:
 		for _ in range(length):
@@ -206,22 +209,8 @@ class s2kOpenPGP:
 			exit(1)
 		return hd[:bs]
 
-# class secretKeyOpenPGP:
 class asymmetricKeyOpenPGP:
-	# def __init__(self, publicKey, symEncAlgo, s2k, encrData, IV):
-	# 	# print('nrsa:',binascii.hexlify(publicKey[0]))
-	# 	# print('ersa:',binascii.hexlify(publicKey[1]))
-	# 	self.fingerPrint = publicKey[0]
-	# 	self.nRSA = Util.toint(publicKey[1])
-	# 	self.messegeLen = len(publicKey[1])
-	# 	self.eRSA = Util.toint(publicKey[2])
-	# 	self.symEncAlgo = symEncAlgo
-	# 	self.s2k = s2k
-	# 	self.IV = IV
-	# 	self.encrData = encrData
-	# 	self.readed = False;
-
-	def __init__(self, fingerPrint, nRSA, eRSA):
+	def __init__(self, fingerPrint, nRSA, eRSA, bodyStart, bodyEnd):
 		# print('nrsa:',binascii.hexlify(publicKey[0]))
 		# print('ersa:',binascii.hexlify(publicKey[1]))
 		self.fingerPrint = fingerPrint
@@ -230,6 +219,9 @@ class asymmetricKeyOpenPGP:
 		self.eRSA = Util.toint(eRSA)
 		self.hasSecretData = False;
 		self.readed = False;
+		self.subKeys = [];
+		self.bodyStart = bodyStart;
+		self.bodyEnd = bodyEnd;
 
 	def insertSecretData(self, symEncAlgo, s2k, IV, encrData):
 		self.symEncAlgo = symEncAlgo
@@ -249,8 +241,6 @@ class asymmetricKeyOpenPGP:
 		
 		lack = bs - len(self.encrData)%bs
 		# print 'lack',lack
-		# if symEncAlgo == AES
-
 
 		# 9.2.  Symmetric-Key Algorithms
 		if self.symEncAlgo == 7:
@@ -308,22 +298,23 @@ class asymmetricKeyOpenPGP:
 		mRSA = Util.powMod(Util.toint(MM), self.eRSA, self.nRSA)
 		return  Util.int2str256(mRSA, self.messegeLen)
 
-class openPGP:
-	#def __init__(self, arg, arg2 = None):
+	def signRSA(self, mRSA, passphrase):#nao testado
+		if not self.readed:
+			self.leSecretData(passphrase)
+		MM = Util.powMod(Util.toint(mRSA), self.dRSA, self.nRSA)
+		return  Util.int2str256(MM, self.messegeLen)
+
+class myOpenPGP:
 	def __init__(self):
-		# self.encodedFile = arg
-		# self.extraParam = arg2
-		# self.secretKeys = []
-		# self.publicKeys = []
 		self.asymmetricKeys = []
 		self.keyId = ''
 
 	def printgpg(self, p, t):
 		print(binascii.hexlify(self.encodedFile[p:p+t]))
 
-	def read_secretKeyPaket(self, p, pEnd):
+	def read_secretKeyPaket(self, p, pEnd, isSubKey = False):
 		#5.5.3.  Secret-Key Packet Formats//Tag 5 or Tag 7
-		p = self.read_publicKeyPaket(p)
+		p = self.read_publicKeyPaket(p, isSubKey)
 		s2kConventions = ord(self.encodedFile[p])
 		p += 1
 		if s2kConventions == 254 or s2kConventions == 255:
@@ -342,9 +333,10 @@ class openPGP:
 			encrData = self.encodedFile[p: pEnd]
 			p = pEnd
 
-			# secretKey = asymmetricKeyOpenPGP(self.publicKeys[-1], symEncAlgo, s2k, encrData, IV)
-			# self.secretKeys.append(secretKey);
-			self.asymmetricKeys[-1].insertSecretData(symEncAlgo, s2k, IV, encrData);
+			if isSubKey:
+				self.asymmetricKeys[-1].subKeys[-1].insertSecretData(symEncAlgo, s2k, IV, encrData);
+			else:
+				self.asymmetricKeys[-1].insertSecretData(symEncAlgo, s2k, IV, encrData);
 
 			# try:
 			# 	secretKey.leSecretData('this is a pass')
@@ -360,7 +352,7 @@ class openPGP:
 			# exit(0)
 		return pEnd
 
-	def read_publicKeyPaket(self, p):
+	def read_publicKeyPaket(self, p, isSubKey = False):
 		#5.5.2.  Public-Key Packet Formats//Tag 6 or Tag 14
 		p0 = p;
 		version = ord(self.encodedFile[p])
@@ -386,18 +378,27 @@ class openPGP:
 				print('fingerPrint all',binascii.hexlify(fingerPrint))
 				fingerPrint = hashlib.sha1(fingerPrint).digest()
 				print('fingerPrint pk',binascii.hexlify(fingerPrint))
-				# self.publicKeys.append((fingerPrint, nRSA, eRSA))
 
-				publicKey = asymmetricKeyOpenPGP(fingerPrint, nRSA, eRSA)
-				self.asymmetricKeys.append(publicKey);
+				publicKey = asymmetricKeyOpenPGP(fingerPrint, nRSA, eRSA, p0, p)
+				if isSubKey:
+					self.asymmetricKeys[-1].subKeys.append(publicKey);
+				else:
+					self.asymmetricKeys.append(publicKey);
 				#print(eRSA, mpi)
 			elif publicKeyAlgo == 16:
 				#Elgamal
-				print '''5.5.2.  Public-Key Packet Formats Elgamal public key'''
+				print '''>>> 5.5.2.  Public-Key Packet Formats Elgamal public key'''
+				p, pDSA = Util.leMPI(self.encodedFile, p)
+				p, gDSA = Util.leMPI(self.encodedFile, p)
+				p, yDSA = Util.leMPI(self.encodedFile, p)
 				exit(1)
 			elif publicKeyAlgo == 17:
 				#DSA
-				print '''5.5.2.  Public-Key Packet Formats DSA public key'''
+				print '''>>> 5.5.2.  Public-Key Packet Formats DSA public key'''
+				p, pDSA = Util.leMPI(self.encodedFile, p)
+				p, qDSA = Util.leMPI(self.encodedFile, p)
+				p, gDSA = Util.leMPI(self.encodedFile, p)
+				p, yDSA = Util.leMPI(self.encodedFile, p)
 				exit(1)
 			else:
 				print('publicKeyAlgo',publicKeyAlgo,'not suported')
@@ -406,6 +407,12 @@ class openPGP:
 			print '>>> Public key paket version must be 3 or 4 <<<'
 			exit(1)
 		return p
+
+	def allKeys(self):
+		for asymKey in self.asymmetricKeys:
+			yield asymKey
+			for asymSubKey in asymKey.subKeys:
+				yield asymSubKey
 
 	def read_Public_Key_Encrypted_Session_Key_Packets(self, p):
 		#5.1.  Public-Key Encrypted Session Key Packets (Tag 1)
@@ -438,12 +445,12 @@ class openPGP:
 				# MM = Util.powMod(mRSA, dRSA, nRSA)
 				# MM = Util.int2str256(MM)
 
-				# for key in self.secretKeys:
-				for key in self.asymmetricKeys:
-					if key.fingerPrint[-8:] != keyId:
+				# for asymKey in self.asymmetricKeys:
+				for asymKey in self.allKeys():
+					if asymKey.fingerPrint[-8:] != keyId:
 						continue
-					MM = key.decodeRSA(mRSA, 'this is a pass')
-					# MM = self.secretKeys[0].decodeRSA(mRSA, 'this is a pass')
+					MM = asymKey.decodeRSA(mRSA, 'this is a pass')
+					# MM = self.asymmetricKeys[0].decodeRSA(mRSA, 'this is a pass')
 					# MM = MM[MM.find(chr(0)):]
 					MM = Util.EME_PKCS1_v1_5_DECODE(MM)
 					# print('sum', reduce(lambda x,y:x+ord(y), MM[2:-2], 0))
@@ -495,12 +502,10 @@ class openPGP:
 		self.symKey = binascii.unhexlify("4bcb9206f7b3064d15f83c8f1399c4367a6bf57251ee1f5d2a19a4abcef34659")
 		checkSum = Util.SampleChecksum(self.symKey)
 		self.symAlgo = 9
-		#MM = chr(self.symAlgo) + self.symKey + chr(checkSum/256) + chr(checkSum%256)
+
 		MM = chr(self.symAlgo) + self.symKey + Util.int2str256(checkSum, 2)
-		# MM = Util.EME_PKCS1_v1_5_ENCODE(MM, self.secretKeys[1].messegeLen)
-		# mRSA = self.secretKeys[1].encodeRSA(MM)
-		MM = Util.EME_PKCS1_v1_5_ENCODE(MM, self.asymmetricKeys[1].messegeLen)
-		mRSA = self.asymmetricKeys[1].encodeRSA(MM)
+		MM = Util.EME_PKCS1_v1_5_ENCODE(MM, self.asymmetricKeys[0].subKeys[0].messegeLen)
+		mRSA = self.asymmetricKeys[0].subKeys[0].encodeRSA(MM)
 		self.encodedFile += Util.toMPI(mRSA)
 
 	def read_SymEncryptedIntegrityProtectedDataPacket(self, p, pEnd):
@@ -532,8 +537,8 @@ class openPGP:
 				print '>>>>>>>>>>>>>>>>>>>> session key is incorrect <<<<<<<<<<<<<<<<<<<<'
 				exit(1)
 			#data = data[18:]
-			print 'new openPGP Protected Data',binascii.hexlify(data[:18]),binascii.hexlify(data[18:])
-			openPGP().readFile(data[18:], data[:18])
+			print 'new myOpenPGP Protected Data',binascii.hexlify(data[:18]),binascii.hexlify(data[18:])
+			myOpenPGP().readFile(data[18:], data[:18])
 		else:
 			print '>>> Sym. Encrypted Integrity Protected Data Packet version must be 1 <<<'
 			exit(1)
@@ -547,7 +552,7 @@ class openPGP:
 		IV = ''.join(chr(Util.myRandInt(0,255)) for i in range(16))
 		IV += IV[-2:]
 
-		data = IV + openPGP().writeFile([11, 19], IV).encodedFile
+		data = IV + myOpenPGP().writeFile([11, 19], IV).encodedFile
 
 		bs = Util.blockSize(self.symAlgo)
 		lack = bs - len(data)%bs
@@ -579,6 +584,8 @@ class openPGP:
 				dateCreated = 'whithout date'
 			p += 4
 			# print(dateCreated.strftime('%H:%M:%S %d/%m/%Y'))
+			self.paketStart = p
+			self.paketEnd = pEnd
 			literalData = self.encodedFile[p:pEnd]
 			# self.encodedFile = self.encodedFile[:p] + 'N' + self.encodedFile[p+1:]
 			p = pEnd
@@ -651,8 +658,8 @@ class openPGP:
 
 	def read_UserIDPacket(self, p, pEnd):
 		# 5.11.  User ID Packet (Tag 13)
-		userId = self.encodedFile[p:pEnd]
-		print('userId',userId)
+		self.userId = self.encodedFile[p:pEnd]
+		print('userId', self.userId)
 		return pEnd
 
 	def SubPacket(self, p, pEnd):
@@ -705,31 +712,40 @@ class openPGP:
 			hashedSubpacket = self.SubPacket(p, p+hashedSubpacketLen)
 			p += hashedSubpacketLen
 			print('hashedSubpacket', hashedSubpacket)
-			sig = binascii.unhexlify("ac22620966696c65322e7478745ab99c3f66696c6520746f206265207369676e65642e0a")
-			sig = binascii.unhexlify("99010d045a1c710b0108009c2c845323709a36b31327dae1a5a8ab49450ce6d37169aa9975c42a500b8a581c4412530bd6ab8ab04f84b7948e1ded21b85ff1252750c0b7b017a99b439df76ffbb42ff143609ab4eaae2b0cb329a731da12934b106f51c37cc558f2d3284b13a36015ff770e490d40adcd2c735cbf8a8dd57bbe0ba08a9996f7532376391f16935ffc0291aa69ab9e39d68d622e57f480a79c14c409a31cc3ab26b2f85cd86b7fdf5f192ad253527b2a9013d97a046131d4cb8ef83bcdde77e1ffb84e023f53491e6442124283db43d3ec5403a337365d9b3f9a0d603173a480d2e8138b9449775d8a8cf264bfe99afa7a0c34f54b686af0387654d9320f8ff9ffffe0fbd30011010001")
-			sig += self.encodedFile[pv:p]
-			self.printgpg(pv, p-pv)
-			hd = hashlib.sha1(sig).hexdigest()
-			print '***************sha1:',hd
-			hd2 = hashlib.md5(sig).hexdigest()
-			print '***************md5:',hd2
-			hd3 = hashlib.sha256(sig).hexdigest()
-			print '***************sha256:',hd3
+			ph = p
+			# sig = binascii.unhexlify("ac22620966696c65322e7478745ab99c3f66696c6520746f206265207369676e65642e0a")
+			# sig = binascii.unhexlify("99010d045a1c710b0108009c2c845323709a36b31327dae1a5a8ab49450ce6d37169aa9975c42a500b8a581c4412530bd6ab8ab04f84b7948e1ded21b85ff1252750c0b7b017a99b439df76ffbb42ff143609ab4eaae2b0cb329a731da12934b106f51c37cc558f2d3284b13a36015ff770e490d40adcd2c735cbf8a8dd57bbe0ba08a9996f7532376391f16935ffc0291aa69ab9e39d68d622e57f480a79c14c409a31cc3ab26b2f85cd86b7fdf5f192ad253527b2a9013d97a046131d4cb8ef83bcdde77e1ffb84e023f53491e6442124283db43d3ec5403a337365d9b3f9a0d603173a480d2e8138b9449775d8a8cf264bfe99afa7a0c34f54b686af0387654d9320f8ff9ffffe0fbd30011010001")
+			# sig += binascii.unhexlify("99010d045a1c710b0108009fed7a4e822a2c4a44618c1aef09ec36ce64565663ea12d4f581c599378dfbf75e2401ade55b277be405b1a55a348431c3c7b11289a47a59cc0eb8180b0a6e09c68fb3b65e8c14dd419f8b35d1af23bb43fa12d0a76416c324c1151c17c68c5d8e66dc735367394808167c0b6fa2de3af25117d1cc069029d55fb266f4dcbcf27726dad9f323b7a79e8bdb874f9320074202d4d4209366bb6f9afea0bb9fa9f0d2f8c606e96cb71e8746bdd651b78754c95b96de0708aa87b121d5c5ab155591285ce95f9145b4d17496dbd63a9f50e3f7d8a4a0d9792686cdcaeb0aed5e3ce7232eb3a13527744ef107ee675fdca8a4b1556f3fa3bdfb4e0edd77c0fe46e16d0011010001")
+			# sig += self.encodedFile[pv:p]
+			# print 'self.encodedFile[pv:p]: ', binascii.hexlify(self.encodedFile[pv-23:p])
+			# sig += binascii.unhexlify("04ff")
+			# sig += binascii.unhexlify('{0:0{1}x}'.format(p-pv, 8))
+			# # self.printgpg(pv, p-pv)
+			# print 'format: ', '{0:0{1}x}'.format(p-pv, 8)
+			# print 'SIG: ', binascii.hexlify(sig)
+			# hd = hashlib.sha1(sig).hexdigest()
+			# print '***************sha1:',hd
+			# hd2 = hashlib.md5(sig).hexdigest()
+			# print '***************md5:',hd2
+			# hd3 = hashlib.sha256(sig).hexdigest()
+			# print '***************sha256:',hd3
+			
 			# print '>>>>>>>>>>>>>>',reduce(lambda x,y:(x+ord(y)), self.encodedFile[pv:p], 0)
 			unhashedSubpacketLen = Util.toint(self.encodedFile[p: p+2])
 			print('unhashedSubpacketLen',unhashedSubpacketLen)
 			p += 2
+
 			# unhashedSubpacket = self.encodedFile[p: p+unhashedSubpacketLen]
 			# p += unhashedSubpacketLen
 			# print 'unhashedSubpacket',binascii.hexlify(unhashedSubpacket)
 			unhashedSubpacket = self.SubPacket(p, p+unhashedSubpacketLen)
 			p += unhashedSubpacketLen
 			print('unhashedSubpacket', unhashedSubpacket)
-			signedHashValue = Util.toint(self.encodedFile[p: p+2])
-			print('signedHashValue', signedHashValue)
-			print('<<<<<<<<<<<<<<<<', hex(signedHashValue))
 
-			print 'target:', binascii.hexlify(self.encodedFile[p: p+2])
+			signedHashValue = self.encodedFile[p: p+2]
+			print('signedHashValue', binascii.hexlify(signedHashValue))
+			p += 2
+
 			# target = binascii.hexlify(self.encodedFile[p: p+2])
 			# c = 0
 			# for i in xrange(len(self.encodedFile)):
@@ -754,34 +770,146 @@ class openPGP:
 			# print 'self.encodedFile[p: p+2]',binascii.hexlify(self.encodedFile[p: p+2])
 			# print 'self.encodedFile[p: p+2]', == "c19e"
 			
-			p += 2
 			while p != pEnd:
+				#teste de alteracao
+				p0 = p
+				#end block
 				p, mm = Util.leMPI(self.encodedFile, p)
-				# if self.keyId != '':
-				# 	print('len(self.publicKeys)', len(self.publicKeys))
-				# 	print 'xxaa', binascii.hexlify(self.keyId)
-				# 	for publicKey in self.publicKeys:
-				# 		# print x[0][-8:] == self.keyId
-				# 		# print 'xxss', binascii.hexlify(x[0])
-				# 		if publicKey[0][-8:] == self.keyId:
-				# 			pass
-				if self.keyId != '':
-					# print('len(self.publicKeys)', len(self.secretKeys))
-					print('len(self.publicKeys)', len(self.asymmetricKeys))
-					print 'xxaa', binascii.hexlify(self.keyId)
-					# for secretKey in self.secretKeys:
-					for secretKey in self.asymmetricKeys:
-						# print x[0][-8:] == self.keyId
-						# print 'xxss', binascii.hexlify(x[0])
-						if secretKey.fingerPrint[-8:] == self.keyId:
-							mm2 = secretKey.unsignRSA(mm)
-							print 'mml2', binascii.hexlify(mm2)
+
+				#9.1.  Public-Key Algorithms
+				if publicKeyAlgo == 1 or publicKeyAlgo == 2 or publicKeyAlgo == 3:
+					#rsa
+
+					if signatureType == 0x18:
+						bs = self.asymmetricKeys[-1].bodyStart
+						be = self.asymmetricKeys[-1].bodyEnd
+						sig = binascii.unhexlify("99" + '{0:0{1}x}'.format(be-bs, 4))
+						sig += self.encodedFile[bs:be]
+						
+						bs = self.asymmetricKeys[-1].subKeys[-1].bodyStart
+						be = self.asymmetricKeys[-1].subKeys[-1].bodyEnd
+						sig += binascii.unhexlify("99" + '{0:0{1}x}'.format(be-bs, 4))
+						sig += self.encodedFile[bs:be]
+						
+						sig += self.encodedFile[pv:ph]
+						sig += binascii.unhexlify("04ff")
+						sig += binascii.unhexlify('{0:0{1}x}'.format(ph-pv, 8))
+						hld = hashlib.sha256(sig).digest()
+
+						if hld[:2] != signedHashValue:
+							print 'hld[:2]:', binascii.hexlify(hld[:2])
+							print 'signedHashValue:', binascii.hexlify(signedHashValue)
+							print '>>>>>>>>>>>>>>>>>>>> left 16 bits of signed hash does not match <<<<<<<<<<<<<<<<<<<<'
+							exit(1)
+
+						mm2 = self.asymmetricKeys[-1].unsignRSA(mm)[-32:]
+						if hld != mm2:
+							print 'hld:', binascii.hexlify(hld)
+							print 'mm2:', binascii.hexlify(mm2)
+							print '>>>>>>>>>>>>>>>>>>>> signed hash does not match <<<<<<<<<<<<<<<<<<<<'
+							exit(1)
+					elif signatureType == 0x13:
+						bs = self.asymmetricKeys[-1].bodyStart
+						be = self.asymmetricKeys[-1].bodyEnd
+						sig = binascii.unhexlify("99" + '{0:0{1}x}'.format(be-bs, 4))
+						sig += self.encodedFile[bs:be]#010d erro
+
+						sig += binascii.unhexlify('b4' + '{0:0{1}x}'.format(len(self.userId), 8))
+						sig += self.userId
+						
+						sig += self.encodedFile[pv:ph]
+						sig += binascii.unhexlify("04ff")
+						sig += binascii.unhexlify('{0:0{1}x}'.format(ph-pv, 8))
+						hld = hashlib.sha256(sig).digest()
+
+						if hld[:2] != signedHashValue:
+							print 'hld[:2]:', binascii.hexlify(hld[:2])
+							print 'signedHashValue:', binascii.hexlify(signedHashValue)
+							print '>>>>>>>>>>>>>>>>>>>> left 16 bits of signed hash does not match <<<<<<<<<<<<<<<<<<<<'
+							exit(1)
+
+						mm2 = self.asymmetricKeys[-1].unsignRSA(mm)[-32:]
+						if hld != mm2:
+							print 'hld:', binascii.hexlify(hld)
+							print 'mm2:', binascii.hexlify(mm2)
+							print '>>>>>>>>>>>>>>>>>>>> signed hash does not match <<<<<<<<<<<<<<<<<<<<'
+							exit(1)
+					elif signatureType == 0x00:
+						sig = self.encodedFile[self.paketStart:self.paketEnd]#010d erro
+
+						sig += self.encodedFile[pv:ph]
+						sig += binascii.unhexlify("04ff")
+						sig += binascii.unhexlify('{0:0{1}x}'.format(ph-pv, 8))
+						hld = hashlib.sha256(sig).digest()
+
+						if hld[:2] != signedHashValue:
+							print 'hld[:2]:', binascii.hexlify(hld[:2])
+							print 'signedHashValue:', binascii.hexlify(signedHashValue)
+							print '>>>>>>>>>>>>>>>>>>>> left 16 bits of signed hash does not match <<<<<<<<<<<<<<<<<<<<'
+							exit(1)
+
+						print('len(self.asymmetricKeys)', len(self.asymmetricKeys))
+						# print 'xxaa', binascii.hexlify(self.keyId)
+						for asymKey in self.allKeys():
+							# print x[0][-8:] == self.keyId
+							# print 'xxss', binascii.hexlify(x[0])
+							if asymKey.fingerPrint[-8:] == self.keyId:
+								mm2 = asymKey.unsignRSA(mm)[-32:]
+								# print 'mml2', binascii.hexlify(mm2)
+								if hld != mm2:
+									print 'hld:', binascii.hexlify(hld)
+									print 'mm2:', binascii.hexlify(mm2)
+									print '>>>>>>>>>>>>>>>>>>>> signed hash does not match <<<<<<<<<<<<<<<<<<<<'
+									exit(1)
+								else:
+									break
+						else :
+							print '>>> not has the key for this signature <<<'
+					else :
+						print '''Not Implemented yet''' , hex(signatureType)
+						exit(1)
+					continue
+
+					if self.keyId != '':
+						print('len(self.asymmetricKeys)', len(self.asymmetricKeys))
+						print 'xxaa', binascii.hexlify(self.keyId)
+						#for asymKey in self.asymmetricKeys:
+						for asymKey in self.allKeys():
+							# print x[0][-8:] == self.keyId
+							# print 'xxss', binascii.hexlify(x[0])
+							if asymKey.fingerPrint[-8:] == self.keyId:
+								mm2 = asymKey.unsignRSA(mm)
+								print 'mml2', binascii.hexlify(mm2)
+					else:
+						#mm2 = self.asymmetricKeys[0].unsignRSA(mm)
+						mm2 = self.asymmetricKeys[-1].unsignRSA(mm)
+						print 'mmk2', binascii.hexlify(mm2)
+						print 'mmk3', binascii.hexlify(mm2[-32:])
+
+						#teste de alteracao
+						if podeModificar:
+							mm2 = mm2[:-1] + chr(0)
+							#mm3 = self.asymmetricKeys[0].signRSA(mm2, 'this is a pass')
+							mm3 = self.asymmetricKeys[-1].signRSA(mm2, 'this is a pass')
+							# print (mm == mm3)
+							print binascii.hexlify(mm)
+							print binascii.hexlify(mm3)
+							# print binascii.hexlify(mm2)
+							mm = mm3
+							print self.encodedFile == self.encodedFile[:p0] + Util.toMPI(mm) + self.encodedFile[p:]
+							self.encodedFile = self.encodedFile[:p0] + Util.toMPI(mm) + self.encodedFile[p:]
+						#end block
+				elif publicKeyAlgo == 16:
+					#Elgamal
+					print '''5.5.2.  Public-Key Packet Formats Elgamal public key'''
+					exit(1)
+				elif publicKeyAlgo == 17:
+					#DSA
+					print '''>>> 5.5.2.  Public-Key Packet Formats DSA public key'''
+					# exit(1)
 				else:
-					# mm2 = self.secretKeys[0].unsignRSA(mm)
-					mm2 = self.asymmetricKeys[0].unsignRSA(mm)
-					print 'mmk2', binascii.hexlify(mm2)
-					print 'mmk3', binascii.hexlify(mm2[-32:])
-				# print(mm,'mm')
+					print('publicKeyAlgo',publicKeyAlgo,'not suported')
+					exit(1)
 		else:
 			print '>>> Signature Packet version must be 3 or 4 <<<'
 			exit(1)
@@ -819,10 +947,10 @@ class openPGP:
 		while p != pEnd:
 			p, mm = Util.leMPI(self.encodedFile, p)
 			if self.keyId != '':
-				# for secretKey in self.secretKeys:
-				for secretKey in self.asymmetricKeys:
-					if secretKey.fingerPrint[-8:] == self.keyId:
-						mm2 = secretKey.unsignRSA(mm)
+				#for asymKey in self.asymmetricKeys:
+				for asymKey in self.allKeys():
+					if asymKey.fingerPrint[-8:] == self.keyId:
+						mm2 = asymKey.unsignRSA(mm)
 						print binascii.hexlify(mm2)
 
 	def read_CompressedDataPacket(self, p, pEnd):
@@ -833,8 +961,8 @@ class openPGP:
 		if compressAlgo == 1:
 			#zip
 			decompressedFile = zlib.decompress(self.encodedFile[p: pEnd], -15)
-			print 'new openPGP zip decompressedFile'
-			openPGP().readFile(decompressedFile)
+			print 'new myOpenPGP zip decompressedFile'
+			myOpenPGP().readFile(decompressedFile)
 		elif compressAlgo == 2:
 			#zlib
 			print '''9.3.  Compression Algorithms: zlib'''
@@ -893,19 +1021,21 @@ class openPGP:
 		publicKeyAlgo = chr(1)
 		self.encodedFile += publicKeyAlgo
 
-		# print 'publicKeys',self.publicKeys
-		# self.encodedFile += self.publicKeys[0][0][-8:]
 		self.encodedFile += self.asymmetricKeys[0].fingerPrint[-8:]
 
 		flagAnotherOnePass = chr(1)
 		self.encodedFile += flagAnotherOnePass
 
 	def readTag(self, tag, p, length):
-		print('tag:', tag)
-		if tag == 5 or tag == 7:
+		print('tag:', tag, length)
+		if tag == 5:
 			return self.read_secretKeyPaket(p, p+length)
-		elif tag == 6 or tag == 14:
+		if tag == 7:
+			return self.read_secretKeyPaket(p, p+length, True)
+		elif tag == 6:
 			return self.read_publicKeyPaket(p)
+		elif tag == 14:
+			return self.read_publicKeyPaket(p, True)
 		elif tag == 1:
 			return self.read_Public_Key_Encrypted_Session_Key_Packets(p)
 		elif tag == 18:
@@ -956,16 +1086,16 @@ class openPGP:
 					crc ^= CRC24_POLY;
 		return crc
 
-	def encodeAsc(self):
+	def encodeAsc(self, title = 'MESSAGE'):
 		crcFile = self.crc24(self.encodedFile)
 		base64File = base64.b64encode(self.encodedFile)
-		self.encodedFile = "-----BEGIN PGP MESSAGE-----\n\n"
+		self.encodedFile = "-----BEGIN PGP " + title + "-----\n\n"
 		p = 0
 		while p < len(base64File):
 			self.encodedFile += base64File[p: p+64] + '\n'
 			p += 64
 		self.encodedFile += '=' + base64.b64encode(binascii.unhexlify(hex(crcFile)[2:-1])) + '\n'
-		self.encodedFile += '-----END PGP MESSAGE-----\n'
+		self.encodedFile += '-----END PGP ' + title + '-----\n'
 		return self
 
 	def decodeAsc(self):
@@ -1053,6 +1183,8 @@ class openPGP:
 			one = pTag & 128#1<<7
 			if not one:
 				print '>>>>>>>>>>>>>>>>>>>> the beggin of block must be 1 <<<<<<<<<<<<<<<<<<<<'
+				print binascii.hexlify(self.encodedFile[:p-1])
+				print binascii.hexlify(self.encodedFile[p-1:])
 				exit(1)
 			newFormat = pTag & 64#1<<6
 			if newFormat:
@@ -1101,14 +1233,14 @@ class openPGP:
 		# print self.encodedFile
 		return self
 
-# openPGP(open("ml2.txt.decoded.gpg", "rb").read()).readFile()
+# myOpenPGP(open("ml2.txt.decoded.gpg", "rb").read()).readFile()
 ttt = '85010c03f7c1f4b58d60352a0108008dd909f507b10e2787c0a046ccbc3b81fca9267ab5d49065ada990789891a21246ea4bbdff21cd8d0bebba6160b7b5e964cc7ca69a02cd8a38333cc8e7c193c05810e9972c64eb170fb46481d82a8f8349a28f3391ab8cd79bd0c42c4dbb3a4c9f777275a62e218c9d8876463983c15c29e95f8962e04a9d581599478d78b5dd29394efafead8c683ad45c094dcce2426525c160ab87b1ef55b4343585657aac8d0477418f705dc77dfee0611c297e5b72ff9e858530885a37b634ed9fb6d4cebba46a937d3957f7d009107f3d1d90404c3f6481db9d4a626102abc36721c46b28841762a45f58330882d4f5e22989512daec1b8e89f867115caccb0de179783d24001805653862a53b4fef15a29427deed7b7e2940650e08a5e9fcc8cdeb03b0411e05dbf9ac2cc1a870aef75d30bc55992b3ab83bd8c5528819f6dc63100174ae7'
 ttt = binascii.unhexlify(ttt)
-# openPGP(ttt).readFile()
-# openPGP(open("secretKey.asc", "rb").read()).readFile()
+# myOpenPGP(ttt).readFile()
+# myOpenPGP(open("secretKey.asc", "rb").read()).readFile()
 # print('---------------')
-# openPGP(open("ml2.txt.gpg", "rb").read()).readFile()
-# sk = openPGP().readFile(open("secretKey.asc", "rb").read()).readFile(open("ml2.txt.gpg", "rb").read()).secretKeys
+# myOpenPGP(open("ml2.txt.gpg", "rb").read()).readFile()
+# sk = myOpenPGP().readFile(open("secretKey.asc", "rb").read()).readFile(open("ml2.txt.gpg", "rb").read()).asymmetricKeys
 # for x in sk:
 # 	print x.nRSA
 # 	print x.pRSA
@@ -1132,12 +1264,12 @@ FileFile = open("file.txt.asc", "rb").read()
 File2File = open("file2.txt.asc", "rb").read()
 mySignFile = open("mySign.asc", "rb").read()
 
-# openPGP().readFile(secretKeyFile)
-# openPGP().readFile(secretKeyFile).readFile(ml2File)
-# print openPGP().readFile(secretKeyFile).writeFile([1, 18]).encodeAsc().savefile("file.txt.asc").encodedFile
-# openPGP().readFile(secretKeyFile).readFile(FileFile)
-# print binascii.hexlify(openPGP().readFile(File2File).encodedFile)
-# ss = openPGP().readFile(secretKeyFile)
+# myOpenPGP().readFile(secretKeyFile)
+# myOpenPGP().readFile(secretKeyFile).readFile(ml2File)
+# print myOpenPGP().readFile(secretKeyFile).writeFile([1, 18]).encodeAsc().savefile("file.txt.asc").encodedFile
+# myOpenPGP().readFile(secretKeyFile).readFile(FileFile)
+# print binascii.hexlify(myOpenPGP().readFile(File2File).encodedFile)
+# ss = myOpenPGP().readFile(secretKeyFile)
 # print'-------aqui--------------'
 # ss.readFile(File2File)
 # # aux = "900d0300080117cdc12bc692c08401ac22620966696c65322e7478745ab99c3f66696c6520746f206265207369676e65642e0a89013304000108001d1621048a2c408d380867f91acda20b17cdc12bc692c08405025ab99c3f000a091017cdc12bc692c084c19e07ff5e694fb228bfcd42f85fbaec3501d1d06dce69e140c7ed86f759ebbea246e4540eab18aadd27b8178fefe8a0c6d2dc479f887b2bed6f879f30b242d123a41da6141f35a389155d35a5a669895ba0325127883dbc5e6d1c10d9f3b9b98d76d05db2188b937d4e3d3990647449030ad0932660ec1564dcd216cd90d94c052a3cdd2e8df4cadd1da55f40ff3dc15335e55090af3a568811c94aeed639709af099c7c0cc1e9beff8d78569838cdf9a24271ea5370df70f1577f23caca0b7890288eafec9dc022f7f9f26e706881597a5b59c7d2bf808b277c3cc4c4b1193ae7865a2efc9976d7bdaf141e6a1bbe255c4884d34a175f3798e488e428a2258103c3fa1"
@@ -1149,10 +1281,38 @@ mySignFile = open("mySign.asc", "rb").read()
 # aux = binascii.unhexlify(aux)
 # find = binascii.unhexlify(find)
 # # # Util.auxF2(hashAlg, aux, find);
-# openPGP().readFile(secretKeyFile).writeFile([4, 11]).savefile("mySign.asc")
-# openPGP().readFile(secretKeyFile).readFile(File2File)
+# myOpenPGP().readFile(secretKeyFile).writeFile([4, 11]).savefile("mySign.asc")
+# myOpenPGP().readFile(secretKeyFile).readFile(File2File)
 
-openPGP().readFile(publicKeyQWFile)
-# ss = openPGP().readFile(secretKeyFile)
+myOpenPGP().readFile(publicKeyQWFile)
+# podeModificar = True
+#end
+# myOpenPGP().readFile(secretKeyFile).readFile(publicKeyQWFile).encodeAsc("PUBLIC KEY BLOCK").savefile("publicKeyQWModif.asc")
+# ss = myOpenPGP().readFile(secretKeyFile)
 # print'-------aqui--------------'
 # ss.readFile(mySignFile)
+
+
+# myOpenPGP().readFile('''-----BEGIN PGP PUBLIC KEY BLOCK-----
+# Version: BCPG v1.39
+
+# mQGiBE5B0h8RBAD533Z5bK1IpBx02QyQL0QoJE4uFRIMGDiwXuwmZzVl+R7Vlurd
+# GRLsCCbE6vOOh7XQVZGzLEBy9WNzZ9m+EbCfSVAYkjS6FhLws6hG6irrnS+b3JBf
+# gFJ8vNGF9Z7bhx+7y7NBk0IMyWkGnUkcnav73t5FQUI2faEBN4c/yAGJZwCgjcB7
+# 3akWk9XVWvTCsiMXxpyvkukEALXsvB6cOoFEtQq9cQHjP63fBlvD94dhhMiM0cH6
+# hW9JotxdK+cxFGG9ZIWgoN2PWbMJka/H4W5EL6tS+YiNAR7I1Ozkt6X16GjnQUzZ
+# MlSpleK+KiKVN2anRaPEoOIinHrE3ZXd6QlJ/4+OJn4IVWmSEaJpFf4QNgvEu4rh
+# xinyBAD2RNzREOA+wpnFZ4lDt9NZXmXdxQME/l0J9XcvWhpGsxA/MATQKImy7N49
+# 7GT/M38F+TrpBobag1O3buE99fOLyws4Tbc+sZMdHxoiGZDAIRNQS2rv475E6ktj
+# 7vd5CYvOkA6+8sX1+hPcNlkHtHB1OFkJRsYp6k0zkyC9adjBM7QTYWJjIDxtYWtj
+# bUBhYWEuY29tPohGBBMRAgAGBQJOQdIfAAoJEDBSJUXPd92GRSQAoItbtbToOg7a
+# /hcg2sA/aBEQNwuxAKCGR69vmSoCWoBP5waPk0UsjM3BSbjMBE5B0h8QAgCUlP7A
+# lfO4XuKGVCs4NvyBpd0KA0m0wjndOHRNSIz44x24vLfTO0GrueWjPMqRRLHO8zLJ
+# S/BXO/BHo6ypjN87Af0VPV1hcq20MEW2iujh3hBwthNwBWhtKdPXOndJGZaB7lsh
+# LJuWv9z6WyDNXj/SBEiV1gnPm0ELeg8Syhy5pCjMAf9QHehP2eCFqfEwTAnaOlA6
+# CU+rYHKPZaI9NUwCA7qD2d93/l08/+ZtFvejZW1RWrJ8qfLDRtlPgRzigoF/CXbR
+# iEYEGBECAAYFAk5B0h8ACgkQMFIlRc933YZRrACfUnWTjHHN+QsEEoJrwRvFmvzj
+# bR4An24pTpeeN+I6R59O/sdmYsAhjULX
+# =sStS
+# -----END PGP PUBLIC KEY BLOCK-----
+# ''')
