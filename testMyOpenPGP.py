@@ -16,9 +16,7 @@ if localTest:
 secretKeyFile = open("secretKey.asc", "rb").read()
 publicKeyQWFile = open("publicKeyQW.asc", "rb").read()
 ml2File = open("ml2.txt.gpg", "rb").read()
-FileFile = open("file.txt.asc", "rb").read()
 File2File = open("file2.txt.asc", "rb").read()
-mySignFile = open("mySign.asc", "rb").read()
 compressZipFile = open("compressZip.gpg", "rb").read()
 rnKeyFile = open("../rnKey.asc", "rb").read()
 
@@ -33,8 +31,10 @@ if praTestar:
 	myOpenPGP().readFile(secretKeyFile).readFile(File2File)
 	myOpenPGP().readFile(secretKeyFile).readFile(ml2File)
 	print myOpenPGP().readFile(secretKeyFile).writeFile([[1], [18]]).encodeAsc().savefile("file.txt.asc").encodedFile
+	FileFile = open("file.txt.asc", "rb").read()
 	myOpenPGP().readFile(secretKeyFile).readFile(FileFile)
 	myOpenPGP().readFile(secretKeyFile).writeFile([[4], [11], [2, 0x00]]).encodeAsc().savefile("mySign.asc")
+	mySignFile = open("mySign.asc", "rb").read()
 	myOpenPGP().readFile(secretKeyFile).readFile(mySignFile)
 	myOpenPGP().readFile(rnKeyFile).readFile(compressZipFile)
 else:

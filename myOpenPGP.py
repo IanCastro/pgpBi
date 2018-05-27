@@ -66,16 +66,15 @@ class myOpenPGP:
 
 	def write_secretKeyPaket(self, isSubKey = False):
 		#5.5.3.  Secret-Key Packet Formats//Tag 5 or Tag 7
-		self.write_publicKeyPaket(isSubKey)
 		s2kConventions = chr(254)
-		self.encodedFile += s2kConventions
-
 		symEncAlgo = chr(7)
-		self.encodedFile += symEncAlgo
 
-		self.encodedFile += self.asymKey.s2k.getPaket()
-		self.encodedFile += self.asymKey.IV
-		self.encodedFile += self.asymKey.encrData#getEncrData
+		return (self.write_publicKeyPaket(isSubKey)
+			+ s2kConventions
+			+ symEncAlgo
+			+ self.asymKey.s2k.getPaket()
+			+ self.asymKey.IV
+			+ self.asymKey.encrData)#getEncrData
 
 	def read_publicKeyPaket(self, p, isSubKey = False):
 		#5.5.2.  Public-Key Packet Formats//Tag 6 or Tag 14
@@ -137,18 +136,15 @@ class myOpenPGP:
 
 	def write_publicKeyPaket(self, isSubKey = False):
 		#5.5.2.  Public-Key Packet Formats//Tag 6 or Tag 14
-		self.asymKey = self.asymmetricKeys[-1]
 		version = chr(4)
-		self.encodedFile += version
-
-		# dateCreated = Util.TIMENOW()
-		self.encodedFile += self.asymKey.dateCreated
-
 		publicKeyAlgo = chr(1)
-		self.encodedFile += publicKeyAlgo
 
-		self.encodedFile += Util.toMPI(self.asymKey.nStrRSA)
-		self.encodedFile += Util.toMPI(self.asymKey.eStrRSA)
+		self.asymKey = self.asymmetricKeys[-1]
+		return (version
+			+ self.asymKey.dateCreated
+			+ publicKeyAlgo
+			+ Util.toMPI(self.asymKey.nStrRSA)
+			+ Util.toMPI(self.asymKey.eStrRSA))
 
 	def allKeys(self):
 		for asymKey in self.asymmetricKeys:
@@ -233,13 +229,8 @@ class myOpenPGP:
 	def write_Public_Key_Encrypted_Session_Key_Packets(self):
 		#5.1.  Public-Key Encrypted Session Key Packets (Tag 1)
 		version = chr(3)
-		self.encodedFile += version
-
 		keyId = binascii.unhexlify("f7c1f4b58d60352a")
-		self.encodedFile += keyId
-
 		publicKeyAlgo = chr(1)
-		self.encodedFile += publicKeyAlgo
 
 		self.symKey = binascii.unhexlify("4bcb9206f7b3064d15f83c8f1399c4367a6bf57251ee1f5d2a19a4abcef34659")
 		checkSum = Util.SampleChecksum(self.symKey)
@@ -248,7 +239,11 @@ class myOpenPGP:
 		MM = chr(self.symAlgo) + self.symKey + Util.int2str256(checkSum, 2)
 		MM = Util.EME_PKCS1_v1_5_ENCODE(MM, self.asymmetricKeys[0].subKeys[0].messegeLen)
 		mRSA = self.asymmetricKeys[0].subKeys[0].encodeRSA(MM)
-		self.encodedFile += Util.toMPI(mRSA)
+		
+		return (version
+			+ keyId
+			+ publicKeyAlgo
+			+ Util.toMPI(mRSA))
 
 	def read_SymEncryptedIntegrityProtectedDataPacket(self, p, pEnd):
 		#5.13.  Sym. Encrypted Integrity Protected Data Packet (Tag 18)
@@ -289,7 +284,6 @@ class myOpenPGP:
 	def write_SymEncryptedIntegrityProtectedDataPacket(self):
 		#5.13.  Sym. Encrypted Integrity Protected Data Packet (Tag 18)
 		version = chr(1)
-		self.encodedFile += version
 
 		IV = ''.join(chr(Util.myRandInt(0,255)) for i in range(16))
 		IV += IV[-2:]
@@ -304,7 +298,7 @@ class myOpenPGP:
 		else:
 			encrData = AES.new(self.symKey, AES.MODE_CFB, chr(0)*bs, segment_size = 128).encrypt(data)
 
-		self.encodedFile += encrData
+		return version + encrData
 
 	def read_LiteralDataPacket(self, p, pEnd):
 		#5.9.  Literal Data Packet (Tag 11)
@@ -341,18 +335,18 @@ class myOpenPGP:
 	def write_LiteralDataPacket(self, fileName):
 		#5.9.  Literal Data Packet (Tag 11)
 		formatted = 'b'
-		self.encodedFile += formatted
 
 		fileNameLen = chr(len(fileName))
-		self.encodedFile += fileNameLen
-
-		self.encodedFile += fileName
 
 		date = chr(0)*4
-		self.encodedFile += date
 
 		self.literalData = open(fileName, "r").read()
-		self.encodedFile += self.literalData
+
+		return (formatted
+			+ fileNameLen
+			+ fileName
+			+ date
+			+ self.literalData)
 
 	def read_ModificationDetectionCodePacket(self, p):
 		#5.14.  Modification Detection Code Packet (Tag 19)
@@ -396,7 +390,7 @@ class myOpenPGP:
 		#5.14.  Modification Detection Code Packet (Tag 19)
 		# print 'ModificationDetectionCodePacket', binascii.hexlify(self.extraParam + self.encodedFile + chr(20))
 		sha = hashlib.sha1(self.extraParam + self.encodedFile + chr(20)).digest()
-		self.encodedFile += sha
+		return sha
 
 	def read_UserIDPacket(self, p, pEnd):
 		# 5.11.  User ID Packet (Tag 13)
@@ -406,7 +400,7 @@ class myOpenPGP:
 
 	def write_UserIDPacket(self):
 		# 5.11.  User ID Packet (Tag 13)
-		self.encodedFile += self.userId
+		return self.userId
 
 	def leSubPacket(self, p, pEnd):
 		dataSet = {}
@@ -561,34 +555,21 @@ class myOpenPGP:
 
 	def write_SignaturePacket(self, signatureType):
 		# 5.2.  Signature Packet (Tag 2)
-		pv = len(self.encodedFile)
-
 		version = chr(4)
-		self.encodedFile += version
-
-		#signatureType = chr(0x00)
-		self.encodedFile += chr(signatureType)
-
 		publicKeyAlgo = chr(1)
-		self.encodedFile += publicKeyAlgo
-
 		hashAlgoId = chr(8)
-		self.encodedFile += hashAlgoId
-
 		hashedSubpacket = self.makeSubPacket({33: chr(4) + self.asymKey.fingerPrint, 2: 'Z\xb9\x9c?'})#Util.TIMENOW()#Util.int2str256(int(time.time()), 4)
-
 		hashedSubpacketLen = Util.int2str256(len(hashedSubpacket), 2)
-		self.encodedFile += hashedSubpacketLen
 
-		self.encodedFile += hashedSubpacket
-		ph = len(self.encodedFile)
+		fistPart = (version
+			+ chr(signatureType)
+			+ publicKeyAlgo
+			+ hashAlgoId
+			+ hashedSubpacketLen
+			+ hashedSubpacket)
 
 		unhashedSubpacket = self.makeSubPacket({16: self.asymKey.fingerPrint[-8:]})
-
 		unhashedSubpacketLen = Util.int2str256(len(unhashedSubpacket), 2)
-		self.encodedFile += unhashedSubpacketLen
-
-		self.encodedFile += unhashedSubpacket
 
 		if signatureType == 0x00:
 			sig = self.literalData
@@ -596,20 +577,21 @@ class myOpenPGP:
 			print '''Not Implemented(write) yet signatureType''' , hex(signatureType)
 			exit(1)
 
-
-		sig += self.encodedFile[pv:ph]
+		sig += fistPart
 		sig += binascii.unhexlify("04ff")
-		sig += binascii.unhexlify('{0:0{1}x}'.format(ph-pv, 8))
-		# print '>>>>> write sig:', binascii.hexlify(sig)
+		sig += binascii.unhexlify('{0:0{1}x}'.format(len(fistPart), 8))
 		hld = hashlib.sha256(sig).digest()
 
 		signedHashValue = hld[:2]
-		self.encodedFile += signedHashValue
 
 		mm2 = Util.EMSA_PKCS1_v1_5(hld, ord(hashAlgoId), self.asymKey.messegeLen)
 		mm = self.asymKey.signRSA(mm2, 'this is a pass')
 
-		self.encodedFile += Util.toMPI(mm)
+		return (fistPart
+			+ unhashedSubpacketLen
+			+ unhashedSubpacket
+			+ signedHashValue
+			+ Util.toMPI(mm))
 
 	def read_CompressedDataPacket(self, p, pEnd):
 		# 5.6.  Compressed Data Packet (Tag 8)
@@ -653,10 +635,10 @@ class myOpenPGP:
 			print 'keyId', binascii.hexlify(self.keyId)
 			p += 8
 
-			flagAnotherOnePass = ord(self.encodedFile[p])
+			flagLastOnePass = ord(self.encodedFile[p])
 			p += 1
 
-			if flagAnotherOnePass == 0:
+			if flagLastOnePass == 0:
 				print ''' 5.4.  One-Pass Signature Packets (Tag 4) '''
 				exit(1)
 			# else:
@@ -668,22 +650,18 @@ class myOpenPGP:
 	def write_One_Pass_Signature_Packets(self):
 		# 5.4.  One-Pass Signature Packets (Tag 4)
 		version = chr(3)
-		self.encodedFile += version
-
 		signatureType = chr(0)
-		self.encodedFile += signatureType
-
 		hashAlgoId = chr(8)
-		self.encodedFile += hashAlgoId
-
 		publicKeyAlgo = chr(1)
-		self.encodedFile += publicKeyAlgo
+		flagLastOnePass = chr(1)
 
 		self.asymKey = self.asymmetricKeys[0]
-		self.encodedFile += self.asymKey.fingerPrint[-8:]
-
-		flagAnotherOnePass = chr(1)
-		self.encodedFile += flagAnotherOnePass
+		return (version
+			+ signatureType
+			+ hashAlgoId
+			+ publicKeyAlgo
+			+ self.asymKey.fingerPrint[-8:]
+			+ flagLastOnePass)
 
 	def readTag(self, tag, p, length):
 		print('tag:', tag, length)
@@ -738,7 +716,6 @@ class myOpenPGP:
 			print('!tag', tag)
 			exit(1)
 			
-
 	def crc24(self, octets):
 		#6.1.  An Implementation of the CRC-24 in "C"
 		crc = CRC24_INIT = 0xB704CEL
@@ -815,10 +792,8 @@ class myOpenPGP:
 
 		for tag in tags:
 			self.encodedFile += chr(192 + tag[0])#chr((1<<7) + (1<<6) + tag)
-			p = len(self.encodedFile)
-			self.writeTag(tag)
-			length = self.len2NewFormat(len(self.encodedFile[p:]))
-			self.encodedFile = self.encodedFile[:p] + length + self.encodedFile[p:]
+			packet = self.writeTag(tag)
+			self.encodedFile += self.len2NewFormat(len(packet)) + packet
 		return self
 
 	def readFile(self, encodedFile, extraParam = None):
@@ -880,6 +855,7 @@ class myOpenPGP:
 			#print('newFormat',newFormat)
 			#print('tag',tag)
 			#print('length',length)
+			#print '??? ',p, length, p+length, len(self.encodedFile)
 			p = self.readTag(tag, p, length)
 
 		# print()
