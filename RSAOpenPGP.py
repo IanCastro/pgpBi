@@ -1,31 +1,29 @@
 from Crypto.Cipher import AES
 import hashlib
+import binascii
 
 import Util
 
 class RSAOpenPGP:
-	def __init__(self, fingerPrint, nRSA, eRSA, bodyStart, bodyEnd, dateCreated):
-		# print('nrsa:',binascii.hexlify(publicKey[0]))
-		# print('ersa:',binascii.hexlify(publicKey[1]))
-		self.fingerPrint = fingerPrint
+	def __init__(self, body, nRSA, eRSA, dateCreated):
+		self.packet = binascii.unhexlify("99" + '{0:0{1}x}'.format(len(body), 4)) + body
 		self.nStrRSA = nRSA
 		self.nRSA = Util.toint(nRSA)
 		self.messegeLen = len(nRSA)
 		self.eStrRSA = eRSA
 		self.eRSA = Util.toint(eRSA)
-		self.hasSecretData = False;
-		self.readed = False;
-		self.subKeys = [];
-		self.bodyStart = bodyStart;
-		self.bodyEnd = bodyEnd;
+		self.hasSecretData = False
+		self.readed = False
+		self.subKeys = []
 		self.dateCreated = dateCreated
+		self.fingerPrint = hashlib.sha1(chr(0x99) +  Util.int2str256(len(body), 2) + body).digest()
 
 	def insertSecretData(self, symEncAlgo, s2k, IV, encrData):
 		self.symEncAlgo = symEncAlgo
 		self.s2k = s2k
 		self.IV = IV
 		self.encrData = encrData
-		self.hasSecretData = True;
+		self.hasSecretData = True
 
 	def leSecretData(self, passphrase):
 		if not self.hasSecretData:
@@ -79,7 +77,7 @@ class RSAOpenPGP:
 		self.pRSA = Util.toint(self.pStrRSA)
 		self.qRSA = Util.toint(self.qStrRSA)
 		self.uRSA = Util.toint(self.uStrRSA)
-		self.readed = True;
+		self.readed = True
 
 	def decodeRSA(self, mRSA, passphrase):
 		if not self.readed:

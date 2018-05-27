@@ -46,9 +46,9 @@ class myOpenPGP:
 			p = pEnd
 
 			if isSubKey:
-				self.asymmetricKeys[-1].subKeys[-1].insertSecretData(symEncAlgo, s2k, IV, encrData);
+				self.asymmetricKeys[-1].subKeys[-1].insertSecretData(symEncAlgo, s2k, IV, encrData)
 			else:
-				self.asymmetricKeys[-1].insertSecretData(symEncAlgo, s2k, IV, encrData);
+				self.asymmetricKeys[-1].insertSecretData(symEncAlgo, s2k, IV, encrData)
 
 			# try:
 			# 	secretKey.leSecretData('this is a pass')
@@ -79,7 +79,7 @@ class myOpenPGP:
 
 	def read_publicKeyPaket(self, p, isSubKey = False):
 		#5.5.2.  Public-Key Packet Formats//Tag 6 or Tag 14
-		p0 = p;
+		p0 = p
 		version = ord(self.encodedFile[p])
 		p += 1
 		# print('version',version)
@@ -100,16 +100,17 @@ class myOpenPGP:
 				p, eRSA = Util.leMPI(self.encodedFile, p)
 				# print 'eRSA',binascii.hexlify(eRSA)
 				# print '99',binascii.hexlify(Util.int2str256(p-p0,2)),binascii.hexlify(self.encodedFile[p0:p])
-				fingerPrint = chr(0x99) +  Util.int2str256(p-p0,2) + self.encodedFile[p0:p]
+				# fingerPrint = chr(0x99) +  Util.int2str256(p-p0,2) + self.encodedFile[p0:p]
 				# print('fingerPrint all:',binascii.hexlify(fingerPrint))
-				fingerPrint = hashlib.sha1(fingerPrint).digest()
-				print 'fingerPrint pk:',binascii.hexlify(fingerPrint)
+				# fingerPrint = hashlib.sha1(fingerPrint).digest()
+				# print 'fingerPrint pk:',binascii.hexlify(fingerPrint)
 
-				publicKey = RSAOpenPGP(fingerPrint, nRSA, eRSA, p0, p, dateCreated)
+				publicKey = RSAOpenPGP(self.encodedFile[p0:p], nRSA, eRSA, dateCreated)
+				print 'fingerPrint pk:',binascii.hexlify(publicKey.fingerPrint)
 				if isSubKey:
-					self.asymmetricKeys[-1].subKeys.append(publicKey);
+					self.asymmetricKeys[-1].subKeys.append(publicKey)
 				else:
-					self.asymmetricKeys.append(publicKey);
+					self.asymmetricKeys.append(publicKey)
 				#print(eRSA, mpi)
 			elif publicKeyAlgo == 16:
 				#Elgamal
@@ -410,20 +411,20 @@ class myOpenPGP:
 	def leSubPacket(self, p, pEnd):
 		dataSet = {}
 		while p != pEnd:
-			stOctet = ord(self.encodedFile[p]);
+			stOctet = ord(self.encodedFile[p])
 			p += 1
 			# print('stOctet',stOctet)
 			if stOctet < 192:
 				length = stOctet
 			elif stOctet < 255:
-				ndOctet = ord(self.encodedFile[p]);
+				ndOctet = ord(self.encodedFile[p])
 				p += 1
 				length = (stOctet - 192 << 8) + ndOctet + 192
 			else:
 				length = Util.toint(self.encodedFile[p: p + 4])
 				p += 4
-			subpacketType = ord(self.encodedFile[p]);
-			subpacketData = self.encodedFile[p+1: p+length];
+			subpacketType = ord(self.encodedFile[p])
+			subpacketData = self.encodedFile[p+1: p+length]
 			p += length
 			# subpacketData = binascii.hexlify(subpacketData)
 			dataSet[subpacketType] = subpacketData
@@ -434,7 +435,7 @@ class myOpenPGP:
 		for subpacketType in dataSet:
 			length = self.len2NewFormat(1 + len(dataSet[subpacketType]))#precissa de modificacoes
 			out += length + chr(subpacketType) + dataSet[subpacketType]
-		return out;
+		return out
 
 	def read_SignaturePacket(self, p, pEnd):
 		# 5.2.  Signature Packet (Tag 2)
@@ -487,107 +488,61 @@ class myOpenPGP:
 				#9.1.  Public-Key Algorithms
 				if publicKeyAlgo == 1 or publicKeyAlgo == 2 or publicKeyAlgo == 3:
 					#rsa
-
 					if signatureType == 0x18:
-						bs = self.asymmetricKeys[-1].bodyStart
-						be = self.asymmetricKeys[-1].bodyEnd
-						sig = binascii.unhexlify("99" + '{0:0{1}x}'.format(be-bs, 4))
-						sig += self.encodedFile[bs:be]
+						sig = self.asymmetricKeys[-1].packet
+						sig += self.asymmetricKeys[-1].subKeys[-1].packet
 						
-						bs = self.asymmetricKeys[-1].subKeys[-1].bodyStart
-						be = self.asymmetricKeys[-1].subKeys[-1].bodyEnd
-						sig += binascii.unhexlify("99" + '{0:0{1}x}'.format(be-bs, 4))
-						sig += self.encodedFile[bs:be]
-						
-						sig += self.encodedFile[pv:ph]
-						sig += binascii.unhexlify("04ff")
-						sig += binascii.unhexlify('{0:0{1}x}'.format(ph-pv, 8))
-						hld = hashAlgo(sig).digest()
-
-						if hld[:2] != signedHashValue:
-							print 'hld[:2]:', binascii.hexlify(hld[:2])
-							print 'signedHashValue:', binascii.hexlify(signedHashValue)
-							print '>>>>>>>>>>>>>>>>>>>> left 16 bits of signed hash does not match <<<<<<<<<<<<<<<<<<<<'
-							exit(1)
-
-						mm2 = self.asymmetricKeys[-1].unsignRSA(mm)[-len(hld):]
-						if hld != mm2:
-							print 'hld:', binascii.hexlify(hld)
-							print 'mm2:', binascii.hexlify(mm2)
-							print '>>>>>>>>>>>>>>>>>>>> signed hash does not match <<<<<<<<<<<<<<<<<<<<'
-							exit(1)
-						else:
-							print 'validado com sucesso:', binascii.hexlify(mm2)
+						asymKeys = [self.asymmetricKeys[-1]]
 					elif signatureType == 0x13:
-						bs = self.asymmetricKeys[-1].bodyStart
-						be = self.asymmetricKeys[-1].bodyEnd
-						sig = binascii.unhexlify("99" + '{0:0{1}x}'.format(be-bs, 4))
-						sig += self.encodedFile[bs:be]
-
+						sig = self.asymmetricKeys[-1].packet
 						sig += binascii.unhexlify('b4' + '{0:0{1}x}'.format(len(self.userId), 8))
 						sig += self.userId
-						# print('self.userId',self.userId)
 						
-						sig += self.encodedFile[pv:ph]
-						sig += binascii.unhexlify("04ff")
-						sig += binascii.unhexlify('{0:0{1}x}'.format(ph-pv, 8))
-						hld = hashAlgo(sig).digest()
-
-						if hld[:2] != signedHashValue:
-							print 'hld[:2]:', binascii.hexlify(hld[:2])
-							print 'signedHashValue:', binascii.hexlify(signedHashValue)
-							print '>>>>>>>>>>>>>>>>>>>> left 16 bits of signed hash does not match <<<<<<<<<<<<<<<<<<<<'
-							exit(1)
-
-						mm2 = self.asymmetricKeys[-1].unsignRSA(mm)[-len(hld):]
-						if hld != mm2:
-							print 'hld:', binascii.hexlify(hld)
-							print 'mm2:', binascii.hexlify(mm2)
-							print '>>>>>>>>>>>>>>>>>>>> signed hash does not match <<<<<<<<<<<<<<<<<<<<'
-							exit(1)
-						else:
-							print 'validado com sucesso:', binascii.hexlify(mm2)
+						asymKeys = [self.asymmetricKeys[-1]]
 					elif signatureType == 0x00:
 						sig = self.encodedFile[self.paketStart:self.paketEnd]
 
-						sig += self.encodedFile[pv:ph]
-						sig += binascii.unhexlify("04ff")
-						sig += binascii.unhexlify('{0:0{1}x}'.format(ph-pv, 8))
-						# print '>>>>> read sig:', binascii.hexlify(sig)
-						hld = hashAlgo(sig).digest()
-
-						if hld[:2] != signedHashValue:
-							print 'hld[:2]:', binascii.hexlify(hld[:2])
-							print 'signedHashValue:', binascii.hexlify(signedHashValue)
-							print '>>>>>>>>>>>>>>>>>>>> left 16 bits of signed hash does not match <<<<<<<<<<<<<<<<<<<<'
-							exit(1)
-
 						# print('len(self.asymmetricKeys)', len(self.asymmetricKeys))
-						# print 'xxaa', binascii.hexlify(self.keyId)
+						asymKeys = []
 						for asymKey in self.allKeys():
-							# print x[0][-8:] == self.keyId
-							# print 'xxss', binascii.hexlify(x[0])
 							# print 'asymKey.fingerPrint[-8:]', binascii.hexlify(asymKey.fingerPrint[-8:])
 							if asymKey.fingerPrint[-8:] == self.keyId:
-								# print 'unsignRSA:', binascii.hexlify(asymKey.unsignRSA(mm))
-								mm2 = asymKey.unsignRSA(mm)[-len(hld):]
-								# print 'mml2', binascii.hexlify(mm2)
-								if hld != mm2:
-									print 'hld:', binascii.hexlify(hld)
-									print 'mm2:', binascii.hexlify(mm2)
-									print '>>>>>>>>>>>>>>>>>>>> signed hash does not match <<<<<<<<<<<<<<<<<<<<'
-									exit(1)
-								else:
-									print 'validado com sucesso:', binascii.hexlify(mm2)
-									break
-						else :
-							print 'self.keyId',binascii.hexlify(self.keyId)
-							print '>>> not has the key for this signature <<<',len(self.asymmetricKeys)
+								asymKeys.append(asymKey)
 					elif signatureType == 0x10:
 						print '''Not Implemented yet signatureType''' , hex(signatureType)
+						return p
 					else :
 						print '''Not Implemented yet signatureType''' , hex(signatureType)
 						exit(1)
+
+					sig += self.encodedFile[pv:ph]
+					sig += binascii.unhexlify("04ff")
+					sig += binascii.unhexlify('{0:0{1}x}'.format(ph-pv, 8))
+
+					hld = hashAlgo(sig).digest()
+					if hld[:2] != signedHashValue:
+						print 'hld[:2]:', binascii.hexlify(hld[:2])
+						print 'signedHashValue:', binascii.hexlify(signedHashValue)
+						print '>>>>>>>>>>>>>>>>>>>> left 16 bits of signed hash does not match <<<<<<<<<<<<<<<<<<<<'
+						exit(1)
+
+					if len(asymKeys) == 0:
+						print 'self.keyId',binascii.hexlify(self.keyId)
+						print '>>> not has the key for this signature <<<',len(self.asymmetricKeys)
+					elif len(asymKeys) > 1:
+						print '>>> has multiples possibilities of key for this signature <<<',len(self.asymmetricKeys)
+						exit(1)
+					else:
+						mm2 = asymKeys[0].unsignRSA(mm)[-len(hld):]
+						# print 'mml2', binascii.hexlify(mm2)
+						if hld != mm2:
+							print 'hld:', binascii.hexlify(hld)
+							print 'mm2:', binascii.hexlify(mm2)
+							print '>>>>>>>>>>>>>>>>>>>> signed hash does not match <<<<<<<<<<<<<<<<<<<<'
+							exit(1)
+						else:
+							print 'validado com sucesso:', binascii.hexlify(mm2)
+							break
 				elif publicKeyAlgo == 16:
 					#Elgamal
 					print '''5.5.2.  Public-Key Packet Formats Elgamal public key'''
@@ -789,11 +744,11 @@ class myOpenPGP:
 		crc = CRC24_INIT = 0xB704CEL
 		CRC24_POLY = 0x1864CFBL
 		for x in octets:
-			crc ^= ord(x) << 16;
+			crc ^= ord(x) << 16
 			for i in xrange(8):
-				crc <<= 1;
+				crc <<= 1
 				if (crc & 0x1000000):
-					crc ^= CRC24_POLY;
+					crc ^= CRC24_POLY
 		return crc
 
 	def encodeAsc(self, title = 'MESSAGE'):
@@ -892,13 +847,13 @@ class myOpenPGP:
 			newFormat = pTag & 64#1<<6
 			if newFormat:
 				tag = pTag & 63#(1<<6)-1
-				stOctet = ord(self.encodedFile[p]);
+				stOctet = ord(self.encodedFile[p])
 				p += 1
 				# print('stOctet',stOctet)
 				if stOctet < 192:
 					length = stOctet
 				elif stOctet < 224:
-					ndOctet = ord(self.encodedFile[p]);
+					ndOctet = ord(self.encodedFile[p])
 					p += 1
 					length = (stOctet - 192 << 8) + ndOctet + 192
 				elif stOctet == 255:
