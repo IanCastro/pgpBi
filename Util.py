@@ -1,6 +1,7 @@
 import binascii
 import random
 import time
+import hashlib
 
 myRandInt = random.SystemRandom().randint
 
@@ -59,7 +60,7 @@ def blockSize(algo):
 	if algo == 7 or algo == 8 or algo == 9:
 		return 16
 	else:
-		print '''9.2.  Symmetric-Key Algorithms'''
+		print '''9.2.  Symmetric-Key Algorithms''', algo
 		exit(1)
 
 def toint(str256):
@@ -139,3 +140,12 @@ def TIMENOW():
 		return '\x5a\x49\x96\x21'#int2str256(1514772001, 4)
 	else:
 		return int2str256(int(time.time()), 4)
+
+def hashAlgo(algo):
+	if algo == 8:
+		return hashlib.sha256
+	elif algo == 2:
+		return hashlib.sha1
+	else:
+		print '''9.4.  Hash Algorithms''', algo
+		exit(1)

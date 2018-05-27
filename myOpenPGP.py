@@ -10,6 +10,8 @@ import Util
 from RSAOpenPGP import RSAOpenPGP
 from S2kOpenPGP import S2kOpenPGP
 
+import testMyOpenPGP
+
 class myOpenPGP:
 	def __init__(self):
 		self.asymmetricKeys = []
@@ -17,6 +19,10 @@ class myOpenPGP:
 
 	def printgpg(self, p, t):
 		print(binascii.hexlify(self.encodedFile[p:p+t]))
+
+	def setAsymmetricKeys(self, asymmetricKeys):
+		self.asymmetricKeys = asymmetricKeys
+		return self
 
 	def read_secretKeyPaket(self, p, pEnd, isSubKey = False):
 		#5.5.3.  Secret-Key Packet Formats//Tag 5 or Tag 7
@@ -273,7 +279,7 @@ class myOpenPGP:
 				exit(1)
 			#data = data[18:]
 			print 'new myOpenPGP Protected Data',binascii.hexlify(data[:18]),binascii.hexlify(data[18:])
-			myOpenPGP().readFile(data[18:], data[:18])
+			myOpenPGP().setAsymmetricKeys(self.asymmetricKeys).readFile(data[18:], data[:18])
 		else:
 			print '>>> Sym. Encrypted Integrity Protected Data Packet version must be 1 <<<'
 			exit(1)
@@ -325,7 +331,7 @@ class myOpenPGP:
 			# self.encodedFile = self.encodedFile[:p] + 'N' + self.encodedFile[p+1:]
 			p = pEnd
 			# print('literalData',literalData)
-			print('file:', fileName, dateCreated, literalData)
+			print 'file:', (fileName, dateCreated, literalData)
 		else:
 			print "Literal Data Packet must be formatted with 'b', 't' or 'u'"
 			exit(1)
@@ -443,12 +449,16 @@ class myOpenPGP:
 			signatureType = ord(self.encodedFile[p])
 			# print('signatureType:',signatureType)
 			p += 1
+
 			publicKeyAlgo = ord(self.encodedFile[p])
 			# print('publicKeyAlgo:',publicKeyAlgo)
 			p += 1
-			hashAlgo = ord(self.encodedFile[p])
-			# print('hashAlgo:',hashAlgo)
+
+			hashAlgoId = ord(self.encodedFile[p])
+			# print('hashAlgoId:',hashAlgoId)
 			p += 1
+			hashAlgo = Util.hashAlgo(hashAlgoId)
+
 			hashedSubpacketLen = Util.toint(self.encodedFile[p: p+2])
 			# print('hashedSubpacketLen:',hashedSubpacketLen)
 			p += 2
@@ -492,7 +502,7 @@ class myOpenPGP:
 						sig += self.encodedFile[pv:ph]
 						sig += binascii.unhexlify("04ff")
 						sig += binascii.unhexlify('{0:0{1}x}'.format(ph-pv, 8))
-						hld = hashlib.sha256(sig).digest()
+						hld = hashAlgo(sig).digest()
 
 						if hld[:2] != signedHashValue:
 							print 'hld[:2]:', binascii.hexlify(hld[:2])
@@ -500,13 +510,14 @@ class myOpenPGP:
 							print '>>>>>>>>>>>>>>>>>>>> left 16 bits of signed hash does not match <<<<<<<<<<<<<<<<<<<<'
 							exit(1)
 
-						mm2 = self.asymmetricKeys[-1].unsignRSA(mm)[-32:]
-						print 'hash:', binascii.hexlify(mm2)
+						mm2 = self.asymmetricKeys[-1].unsignRSA(mm)[-len(hld):]
 						if hld != mm2:
 							print 'hld:', binascii.hexlify(hld)
 							print 'mm2:', binascii.hexlify(mm2)
 							print '>>>>>>>>>>>>>>>>>>>> signed hash does not match <<<<<<<<<<<<<<<<<<<<'
 							exit(1)
+						else:
+							print 'validado com sucesso:', binascii.hexlify(mm2)
 					elif signatureType == 0x13:
 						bs = self.asymmetricKeys[-1].bodyStart
 						be = self.asymmetricKeys[-1].bodyEnd
@@ -515,11 +526,12 @@ class myOpenPGP:
 
 						sig += binascii.unhexlify('b4' + '{0:0{1}x}'.format(len(self.userId), 8))
 						sig += self.userId
+						# print('self.userId',self.userId)
 						
 						sig += self.encodedFile[pv:ph]
 						sig += binascii.unhexlify("04ff")
 						sig += binascii.unhexlify('{0:0{1}x}'.format(ph-pv, 8))
-						hld = hashlib.sha256(sig).digest()
+						hld = hashAlgo(sig).digest()
 
 						if hld[:2] != signedHashValue:
 							print 'hld[:2]:', binascii.hexlify(hld[:2])
@@ -527,13 +539,14 @@ class myOpenPGP:
 							print '>>>>>>>>>>>>>>>>>>>> left 16 bits of signed hash does not match <<<<<<<<<<<<<<<<<<<<'
 							exit(1)
 
-						mm2 = self.asymmetricKeys[-1].unsignRSA(mm)[-32:]
-						print 'hash:', binascii.hexlify(mm2)
+						mm2 = self.asymmetricKeys[-1].unsignRSA(mm)[-len(hld):]
 						if hld != mm2:
 							print 'hld:', binascii.hexlify(hld)
 							print 'mm2:', binascii.hexlify(mm2)
 							print '>>>>>>>>>>>>>>>>>>>> signed hash does not match <<<<<<<<<<<<<<<<<<<<'
 							exit(1)
+						else:
+							print 'validado com sucesso:', binascii.hexlify(mm2)
 					elif signatureType == 0x00:
 						sig = self.encodedFile[self.paketStart:self.paketEnd]
 
@@ -541,7 +554,7 @@ class myOpenPGP:
 						sig += binascii.unhexlify("04ff")
 						sig += binascii.unhexlify('{0:0{1}x}'.format(ph-pv, 8))
 						# print '>>>>> read sig:', binascii.hexlify(sig)
-						hld = hashlib.sha256(sig).digest()
+						hld = hashAlgo(sig).digest()
 
 						if hld[:2] != signedHashValue:
 							print 'hld[:2]:', binascii.hexlify(hld[:2])
@@ -554,20 +567,24 @@ class myOpenPGP:
 						for asymKey in self.allKeys():
 							# print x[0][-8:] == self.keyId
 							# print 'xxss', binascii.hexlify(x[0])
+							# print 'asymKey.fingerPrint[-8:]', binascii.hexlify(asymKey.fingerPrint[-8:])
 							if asymKey.fingerPrint[-8:] == self.keyId:
 								# print 'unsignRSA:', binascii.hexlify(asymKey.unsignRSA(mm))
-								mm2 = asymKey.unsignRSA(mm)[-32:]
+								mm2 = asymKey.unsignRSA(mm)[-len(hld):]
 								# print 'mml2', binascii.hexlify(mm2)
-								print 'hash:', binascii.hexlify(mm2)
 								if hld != mm2:
 									print 'hld:', binascii.hexlify(hld)
 									print 'mm2:', binascii.hexlify(mm2)
 									print '>>>>>>>>>>>>>>>>>>>> signed hash does not match <<<<<<<<<<<<<<<<<<<<'
 									exit(1)
 								else:
+									print 'validado com sucesso:', binascii.hexlify(mm2)
 									break
 						else :
-							print '>>> not has the key for this signature <<<'
+							print 'self.keyId',binascii.hexlify(self.keyId)
+							print '>>> not has the key for this signature <<<',len(self.asymmetricKeys)
+					elif signatureType == 0x10:
+						print '''Not Implemented yet signatureType''' , hex(signatureType)
 					else :
 						print '''Not Implemented yet signatureType''' , hex(signatureType)
 						exit(1)
@@ -600,8 +617,8 @@ class myOpenPGP:
 		publicKeyAlgo = chr(1)
 		self.encodedFile += publicKeyAlgo
 
-		hashAlgo = chr(8)
-		self.encodedFile += hashAlgo
+		hashAlgoId = chr(8)
+		self.encodedFile += hashAlgoId
 
 		hashedSubpacket = self.makeSubPacket({33: chr(4) + self.asymKey.fingerPrint, 2: 'Z\xb9\x9c?'})#Util.TIMENOW()#Util.int2str256(int(time.time()), 4)
 
@@ -634,7 +651,7 @@ class myOpenPGP:
 		signedHashValue = hld[:2]
 		self.encodedFile += signedHashValue
 
-		mm2 = Util.EMSA_PKCS1_v1_5(hld, ord(hashAlgo), self.asymKey.messegeLen)
+		mm2 = Util.EMSA_PKCS1_v1_5(hld, ord(hashAlgoId), self.asymKey.messegeLen)
 		mm = self.asymKey.signRSA(mm2, 'this is a pass')
 
 		self.encodedFile += Util.toMPI(mm)
@@ -648,7 +665,7 @@ class myOpenPGP:
 			#zip
 			decompressedFile = zlib.decompress(self.encodedFile[p: pEnd], -15)
 			print 'new myOpenPGP zip decompressedFile'
-			myOpenPGP().readFile(decompressedFile)
+			myOpenPGP().setAsymmetricKeys(self.asymmetricKeys).readFile(decompressedFile)
 		elif compressAlgo == 2:
 			#zlib
 			print '''9.3.  Compression Algorithms: zlib'''
@@ -671,7 +688,7 @@ class myOpenPGP:
 			#5.2.1.  Signature Types
 			p += 1
 
-			hashAlgo = ord(self.encodedFile[p])
+			hashAlgoId = ord(self.encodedFile[p])
 			p += 1
 
 			publicKeyAlgo = ord(self.encodedFile[p])
@@ -701,8 +718,8 @@ class myOpenPGP:
 		signatureType = chr(0)
 		self.encodedFile += signatureType
 
-		hashAlgo = chr(8)
-		self.encodedFile += hashAlgo
+		hashAlgoId = chr(8)
+		self.encodedFile += hashAlgoId
 
 		publicKeyAlgo = chr(1)
 		self.encodedFile += publicKeyAlgo
@@ -718,11 +735,11 @@ class myOpenPGP:
 		if tag == 5:
 			return self.read_secretKeyPaket(p, p+length)
 		if tag == 7:
-			return self.read_secretKeyPaket(p, p+length, True)
+			return self.read_secretKeyPaket(p, p+length, isSubKey = True)
 		elif tag == 6:
 			return self.read_publicKeyPaket(p)
 		elif tag == 14:
-			return self.read_publicKeyPaket(p, True)
+			return self.read_publicKeyPaket(p, isSubKey = True)
 		elif tag == 1:
 			return self.read_Public_Key_Encrypted_Session_Key_Packets(p)
 		elif tag == 18:
@@ -742,7 +759,7 @@ class myOpenPGP:
 		else:
 			print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!tag', tag)
 			print('!length', length)
-			return p + length
+			exit(1)
 
 	def writeTag(self, tagInfo):
 		tag = tagInfo[0]
@@ -850,6 +867,7 @@ class myOpenPGP:
 		return self
 
 	def readFile(self, encodedFile, extraParam = None):
+		# print('!!!!!!!!!!!!!!!! readFile len(self.asymmetricKeys)', len(self.asymmetricKeys))
 		self.encodedFile = encodedFile
 		self.extraParam = extraParam
 		# self.encodedFile = open("ml2.txt.decoded.gpg", "rb").read()
