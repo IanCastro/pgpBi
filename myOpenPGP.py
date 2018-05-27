@@ -1,347 +1,14 @@
 import binascii
+from Crypto.Cipher import AES
 from datetime import datetime
 import hashlib
-from Crypto.Cipher import AES
 import base64
 import zlib
-import random
 import time
 
-class MyException(Exception):
-    pass
-
-class Util:
-	myRandInt = random.SystemRandom().randint
-
-	@staticmethod
-	def auxF(h, M, f):
-		if h == 8:
-			hashAlgo = hashlib.sha256
-		elif h == 2:
-			hashAlgo = hashlib.sha1
-		else:
-			print '>>> !hashAlgo <<<'
-			exit(1)
-		# M = binascii.unhexlify(M)
-		# f = binascii.unhexlify(f)
-		# print binascii.hexlify(f)
-		for i in xrange(len(M)):
-			for j in xrange(i):
-				# print '?',hashAlgo(M[j: i]).hexdigest()
-				if hashAlgo(M[j: i]).digest() == f:
-					print 'ji:',j,i,hashAlgo(M[j: i]).hexdigest()
-		print '!ji'
-
-	@staticmethod
-	def auxF2(h, M, f):
-		if h == 8:
-			hashAlgo = hashlib.sha256
-		elif h == 2:
-			hashAlgo = hashlib.sha1
-		else:
-			print '>>> !hashAlgo <<<'
-			exit(1)
-		# M = binascii.unhexlify(M)
-		# f = binascii.unhexlify(f)
-		# print binascii.hexlify(f)
-		for i in xrange(len(M)):
-			print 'i', i, len(M)
-			for j in xrange(i):
-				for k in xrange(i, len(M)):
-					for l in xrange(i, k):
-						# print '?',hashAlgo(M[j: i]).hexdigest()
-						if hashAlgo(M[j: i] + M[l: k]).digest() == f:
-							print 'ji:',j,i,hashAlgo(M[j: i]).hexdigest()
-		print '!ji'
-
-	@staticmethod
-	def powMod(b, e, mod):
-		#print('e', e)
-		o = 1
-		a = b
-		while e > 0:
-			if e%2 == 1:
-				o = (o * a) % mod
-			a = (a*a)%mod
-			e //= 2
-		return o
-
-	@staticmethod
-	def blockSize(algo):
-		# 9.2.  Symmetric-Key Algorithms
-		if algo == 7 or algo == 8 or algo == 9:
-			return 16
-		else:
-			print '''9.2.  Symmetric-Key Algorithms'''
-			exit(1)
-
-	@staticmethod
-	def toint(str256):
-		return reduce(lambda x,y:x*256+ord(y), str256, 0)
-
-	@staticmethod
-	def SampleChecksum(data):
-		return reduce(lambda x,y:(x+ord(y))%65536, data, 0)
-	
-	@staticmethod
-	def leMPI(data, p):
-		length = (Util.toint(data[p: p + 2]) + 7) / 8
-		p += 2
-		mpi = data[p: p + length]
-		p += length
-		return (p, mpi)
-	
-	@staticmethod
-	def toMPI(data):
-		length = len(data)*8
-		p = 0
-		while data[p] == chr(0):
-			p += 1
-			length -= 8
-		aux = 128
-		while aux > ord(data[p]):
-			aux /= 2
-			length -= 1
-		return Util.int2str256(length, 2) + data[p:]
-		
-	@staticmethod
-	def int2str256(longInt, length):
-		return binascii.unhexlify("{0:0{1}x}".format(longInt, length*2));
-		# if longInt == 0:
-		# 	return chr(0)
-		str = ''
-		# while longInt > 0:
-		for _ in range(length):
-			str += chr(longInt%256)
-			longInt /= 256
-		return str[::-1]
-
-	@staticmethod
-	def EME_PKCS1_v1_5_DECODE(EM):
-		#13.1.2.  EME-PKCS1-v1_5-DECODE
-		p = EM.find(chr(0), 1)
-		if p <= 8 or EM[0] != chr(0) or EM[1] != chr(2):
-			return ""
-			print '>>>>>>>>>>>>>>>>>>>> EME-PKCS1-v1_5-DECODE decryption error <<<<<<<<<<<<<<<<<<<<'
-			exit(1)
-		return EM[p+1:]
-
-	@staticmethod
-	def EME_PKCS1_v1_5_ENCODE(M, k):
-		#13.1.1.  EME-PKCS1-v1_5-ENCODE
-		psLen = k - len(M) - 3
-		if psLen < 8:
-			print '>>>>>>>>>>>>>>>>>>>> EME-PKCS1-v1_5-ENCODE message too long <<<<<<<<<<<<<<<<<<<<'
-			exit(1)
-
-		randCharNon0 = lambda : chr(Util.myRandInt(1,255))
-		PS = ''.join(randCharNon0() for i in range(psLen))
-		return chr(0) + chr(2) + PS + chr(0) + M
-
-	@staticmethod
-	def EMSA_PKCS1_v1_5(M, hashAlgo, length):
-		#13.1.3.  EMSA-PKCS1-v1_5
-		T = Util.ASN_1_DER(hashAlgo)
-		psLen = length - 3 - len(T) - len(M)
-		if psLen < 8:
-			print '>>>>>>>>>>>>>>>>>>>> EMSA-PKCS1-v1_5 intended encoded message length too short <<<<<<<<<<<<<<<<<<<<'
-			exit(1)
-		return chr(0) + chr(1) + chr(0xff)*psLen + chr(0) + T + M
-
-	@staticmethod
-	def ASN_1_DER(hashAlgo):
-		if hashAlgo == 8:
-			return binascii.unhexlify('3031300d060960864801650304020105000420')
-		else:
-			print '''5.2.2.  Version 3 Signature Packet Format//The full hash prefixes'''
-			exit(1)
-
-	@staticmethod
-	def TIMENOW():
-		if localTest:
-			return '\x5a\x49\x96\x21'#Util.int2str256(1514772001, 4)
-		else:
-			return Util.int2str256(int(time.time()), 4)
-
-class s2kOpenPGP:
-	def read(self, data, p):
-		self.packet = ""
-		self.version = ord(data[p])
-		# self.printgpg(p, 1)
-		p += 1
-		#3.7.1.  String-to-Key (S2K) Specifier Types
-		if self.version != 0 and self.version != 1 and self.version != 3:
-			print '>>> self.version version must be 0, 1 or 3 <<<'
-			exit(1)
-
-		self.hashAlgo = ord(data[p])
-		# self.printgpg(p, 1)
-		p += 1
-
-		if self.version == 1 or self.version == 3:
-			self.salt = data[p: p + 8]
-			# self.printgpg(p, 8)
-			p += 8
-
-		if self.version == 3:
-			self.coded = ord(data[p])
-			self.count = (16 + (self.coded & 15)) << ((self.coded >> 4) + 6)
-			# self.printgpg(p, 1)
-			p += 1
-		return p
-
-	def getPaket(self):
-		if self.packet == "":
-			self.packet += chr(self.version)
-			self.packet += chr(self.hashAlgo)
-
-			if self.version == 1 or self.version == 3:
-				self.packet += self.salt
-
-			if self.version == 3:
-				self.packet += chr(self.coded)
-		return self.packet
-
-	def makeKey(self, bs, passphrase):
-		#3.7.1.3.  Iterated and Salted S2K
-		comb = self.salt+passphrase
-		while len(comb) < self.count:
-			comb += comb
-		comb = comb[:self.count]
-
-		if self.hashAlgo == 1:
-			#MD5
-			print '''s2k MD5'''
-			exit(1)
-		elif self.hashAlgo == 2:
-			hd = hashlib.sha1(comb).digest()
-		elif self.hashAlgo == 3:
-			#RIPE-MD/160
-			print '''s2k RIPE-MD/160'''
-			exit(1)
-		elif self.hashAlgo == 8:
-			#SHA256
-			print '''s2k SHA256'''
-			exit(1)
-		elif self.hashAlgo == 9:
-			#SHA384
-			print '''s2k SHA384'''
-			exit(1)
-		elif self.hashAlgo == 10:
-			#SHA384
-			print '''s2k SHA384'''
-			exit(1)
-		elif self.hashAlgo == 11:
-			#SHA224
-			print '''s2k SHA224'''
-			exit(1)
-		else:
-			print('Hash Algorithms ', self.hashAlgo, 'not suported')
-			exit(1)
-
-		if len(hd) < bs:
-			print '''need multiples hashes to make key'''
-			print '''3.7.1.  String-to-Key (S2K) Specifier Types'''
-			exit(1)
-		return hd[:bs]
-
-class asymmetricKeyOpenPGP:
-	def __init__(self, fingerPrint, nRSA, eRSA, bodyStart, bodyEnd, dateCreated):
-		# print('nrsa:',binascii.hexlify(publicKey[0]))
-		# print('ersa:',binascii.hexlify(publicKey[1]))
-		self.fingerPrint = fingerPrint
-		self.nStrRSA = nRSA
-		self.nRSA = Util.toint(nRSA)
-		self.messegeLen = len(nRSA)
-		self.eStrRSA = eRSA
-		self.eRSA = Util.toint(eRSA)
-		self.hasSecretData = False;
-		self.readed = False;
-		self.subKeys = [];
-		self.bodyStart = bodyStart;
-		self.bodyEnd = bodyEnd;
-		self.dateCreated = dateCreated
-
-	def insertSecretData(self, symEncAlgo, s2k, IV, encrData):
-		self.symEncAlgo = symEncAlgo
-		self.s2k = s2k
-		self.IV = IV
-		self.encrData = encrData
-		self.hasSecretData = True;
-
-	def leSecretData(self, passphrase):
-		if not self.hasSecretData:
-			print '>>>>>>>>>>>>>>>>>>>> not has secret data <<<<<<<<<<<<<<<<<<<<'
-			exit(1)
-
-		bs = Util.blockSize(self.symEncAlgo)
-		
-		symKey = self.s2k.makeKey(bs, passphrase)
-		
-		lack = bs - len(self.encrData)%bs
-		# print 'lack',lack
-
-		# 9.2.  Symmetric-Key Algorithms
-		if self.symEncAlgo == 7:
-			# AES with 128-bit key
-			if lack != bs:
-				self.encrData = self.encrData+chr(0)*lack
-				data = AES.new(symKey, AES.MODE_CFB, self.IV, segment_size = 128).decrypt(self.encrData)[:-lack]
-			else:
-				data = AES.new(symKey, AES.MODE_CFB, self.IV, segment_size = 128).decrypt(self.encrData)
-		else:
-			print '''9.2.  Symmetric-Key Algorithms'''
-			exit(1)
-
-
-		#print 'data',binascii.hexlify(data)
-		p, self.dStrRSA = Util.leMPI(data, 0)
-		p, self.pStrRSA = Util.leMPI(data, p)
-		p, self.qStrRSA = Util.leMPI(data, p)
-		p, self.uStrRSA = Util.leMPI(data, p)
-		#print 'dRSA',binascii.hexlify(dRSA)
-		#print 'pRSA',binascii.hexlify(pRSA)
-		#print 'qRSA',binascii.hexlify(qRSA)
-		#print 'uRSA',binascii.hexlify(uRSA)
-		# print 'ddddddddddddddddd',binascii.hexlify(data)
-		# print 'ddddddddddddddddd',binascii.hexlify(data[p:])
-
-		if hashlib.sha1(data[:p]).digest() != data[p:]:
-			# print 'passphrase incorrect'
-			print 'sha1',hashlib.sha1(data[:p]).hexdigest()
-			print 'sha1',binascii.hexlify(data[p:])
-			raise MyException('>>> passphrase incorrect <<<')
-
-		# print binascii.hexlify(hashlib.sha1(data[:p]).digest())
-		# print binascii.hexlify(data[p:])
-		# print 'passphrase correct'
-
-
-		self.dRSA = Util.toint(self.dStrRSA)
-		self.pRSA = Util.toint(self.pStrRSA)
-		self.qRSA = Util.toint(self.qStrRSA)
-		self.uRSA = Util.toint(self.uStrRSA)
-		self.readed = True;
-
-	def decodeRSA(self, mRSA, passphrase):
-		if not self.readed:
-			self.leSecretData(passphrase)
-		MM = Util.powMod(Util.toint(mRSA), self.dRSA, self.nRSA)
-		return  Util.int2str256(MM, self.messegeLen)
-
-	def encodeRSA(self, MM):
-		mRSA = Util.powMod(Util.toint(MM), self.eRSA, self.nRSA)
-		return  Util.int2str256(mRSA, self.messegeLen)
-
-	def unsignRSA(self, MM):
-		mRSA = Util.powMod(Util.toint(MM), self.eRSA, self.nRSA)
-		return  Util.int2str256(mRSA, self.messegeLen)
-
-	def signRSA(self, mRSA, passphrase):#nao testado
-		if not self.readed:
-			self.leSecretData(passphrase)
-		MM = Util.powMod(Util.toint(mRSA), self.dRSA, self.nRSA)
-		return  Util.int2str256(MM, self.messegeLen)
+import Util
+from RSAOpenPGP import RSAOpenPGP
+from S2kOpenPGP import S2kOpenPGP
 
 class myOpenPGP:
 	def __init__(self):
@@ -362,7 +29,7 @@ class myOpenPGP:
 			p += 1
 			#9.2.  Symmetric-Key Algorithms
 
-			s2k = s2kOpenPGP()
+			s2k = S2kOpenPGP()
 			p = s2k.read(self.encodedFile, p)
 
 			bs = Util.blockSize(symEncAlgo)
@@ -432,7 +99,7 @@ class myOpenPGP:
 				fingerPrint = hashlib.sha1(fingerPrint).digest()
 				print 'fingerPrint pk:',binascii.hexlify(fingerPrint)
 
-				publicKey = asymmetricKeyOpenPGP(fingerPrint, nRSA, eRSA, p0, p, dateCreated)
+				publicKey = RSAOpenPGP(fingerPrint, nRSA, eRSA, p0, p, dateCreated)
 				if isSubKey:
 					self.asymmetricKeys[-1].subKeys.append(publicKey);
 				else:
@@ -936,7 +603,7 @@ class myOpenPGP:
 		hashAlgo = chr(8)
 		self.encodedFile += hashAlgo
 
-		hashedSubpacket = self.makeSubPacket({33: chr(4) + self.asymKey.fingerPrint, 2: 'Z\xb9\x9c?'})#'Z\xb9\x9c?'#Util.int2str256(int(time.time()), 4)
+		hashedSubpacket = self.makeSubPacket({33: chr(4) + self.asymKey.fingerPrint, 2: 'Z\xb9\x9c?'})#Util.TIMENOW()#Util.int2str256(int(time.time()), 4)
 
 		hashedSubpacketLen = Util.int2str256(len(hashedSubpacket), 2)
 		self.encodedFile += hashedSubpacketLen
@@ -1254,32 +921,3 @@ class myOpenPGP:
 		# self.encodeAsc()
 		# print self.encodedFile
 		return self
-
-
-localTest = True
-if localTest:
-	random.seed(0)
-	Util.myRandInt = random.randint
-
-secretKeyFile = open("secretKey.asc", "rb").read()
-publicKeyQWFile = open("publicKeyQW.asc", "rb").read()
-ml2File = open("ml2.txt.gpg", "rb").read()
-FileFile = open("file.txt.asc", "rb").read()
-File2File = open("file2.txt.asc", "rb").read()
-mySignFile = open("mySign.asc", "rb").read()
-
-
-praTestar = True
-if praTestar:
-	myOpenPGP().readFile(publicKeyQWFile)
-
-	print binascii.hexlify(myOpenPGP().readFile(File2File).encodedFile)
-	myOpenPGP().readFile(secretKeyFile)
-	myOpenPGP().readFile(secretKeyFile).readFile(File2File)
-	myOpenPGP().readFile(secretKeyFile).readFile(ml2File)
-	print myOpenPGP().readFile(secretKeyFile).writeFile([[1], [18]]).encodeAsc().savefile("file.txt.asc").encodedFile
-	myOpenPGP().readFile(secretKeyFile).readFile(FileFile)
-	myOpenPGP().readFile(secretKeyFile).writeFile([[4], [11], [2, 0x00]]).encodeAsc().savefile("mySign.asc")
-	myOpenPGP().readFile(secretKeyFile).readFile(mySignFile)
-else:
-	myOpenPGP().readFile(secretKeyFile).writeFile([[5], [13], [2, 0x13], [7], [2, 0x18]])
