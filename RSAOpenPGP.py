@@ -17,6 +17,7 @@ class RSAOpenPGP:
 		self.subKeys = []
 		self.dateCreated = dateCreated
 		self.fingerPrint = hashlib.sha1(chr(0x99) +  Util.int2str256(len(body), 2) + body).digest()
+		self.keyId = self.fingerPrint[-8:]
 
 	def insertSecretData(self, symEncAlgo, s2k, IV, encrData):
 		self.symEncAlgo = symEncAlgo

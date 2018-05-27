@@ -185,7 +185,7 @@ class myOpenPGP:
 
 				# for asymKey in self.asymmetricKeys:
 				for asymKey in self.allKeys():
-					if asymKey.fingerPrint[-8:] != keyId:
+					if asymKey.keyId != keyId:
 						continue
 					MM = asymKey.decodeRSA(mRSA, 'this is a pass')
 					# MM = self.asymmetricKeys[0].decodeRSA(mRSA, 'this is a pass')
@@ -229,19 +229,19 @@ class myOpenPGP:
 	def write_Public_Key_Encrypted_Session_Key_Packets(self):
 		#5.1.  Public-Key Encrypted Session Key Packets (Tag 1)
 		version = chr(3)
-		keyId = binascii.unhexlify("f7c1f4b58d60352a")
 		publicKeyAlgo = chr(1)
 
-		self.symKey = binascii.unhexlify("4bcb9206f7b3064d15f83c8f1399c4367a6bf57251ee1f5d2a19a4abcef34659")
+		self.symKey = binascii.unhexlify("4bcb9206f7b3064d15f83c8f1399c4367a6bf57251ee1f5d2a19a4abcef34659")#generate a new key
 		checkSum = Util.SampleChecksum(self.symKey)
 		self.symAlgo = 9
 
+		self.asymKey = self.asymmetricKeys[0].subKeys[0]
 		MM = chr(self.symAlgo) + self.symKey + Util.int2str256(checkSum, 2)
-		MM = Util.EME_PKCS1_v1_5_ENCODE(MM, self.asymmetricKeys[0].subKeys[0].messegeLen)
-		mRSA = self.asymmetricKeys[0].subKeys[0].encodeRSA(MM)
+		MM = Util.EME_PKCS1_v1_5_ENCODE(MM, self.asymKey.messegeLen)
+		mRSA = self.asymKey.encodeRSA(MM)
 		
 		return (version
-			+ keyId
+			+ self.asymKey.keyId
 			+ publicKeyAlgo
 			+ Util.toMPI(mRSA))
 
@@ -499,8 +499,8 @@ class myOpenPGP:
 						# print('len(self.asymmetricKeys)', len(self.asymmetricKeys))
 						asymKeys = []
 						for asymKey in self.allKeys():
-							# print 'asymKey.fingerPrint[-8:]', binascii.hexlify(asymKey.fingerPrint[-8:])
-							if asymKey.fingerPrint[-8:] == self.keyId:
+							# print 'asymKey.keyId', binascii.hexlify(asymKey.keyId)
+							if asymKey.keyId == self.keyId:
 								asymKeys.append(asymKey)
 					elif signatureType == 0x10:
 						print '''Not Implemented yet signatureType''' , hex(signatureType)
@@ -568,7 +568,7 @@ class myOpenPGP:
 			+ hashedSubpacketLen
 			+ hashedSubpacket)
 
-		unhashedSubpacket = self.makeSubPacket({16: self.asymKey.fingerPrint[-8:]})
+		unhashedSubpacket = self.makeSubPacket({16: self.asymKey.keyId})
 		unhashedSubpacketLen = Util.int2str256(len(unhashedSubpacket), 2)
 
 		if signatureType == 0x00:
@@ -660,7 +660,7 @@ class myOpenPGP:
 			+ signatureType
 			+ hashAlgoId
 			+ publicKeyAlgo
-			+ self.asymKey.fingerPrint[-8:]
+			+ self.asymKey.keyId
 			+ flagLastOnePass)
 
 	def readTag(self, tag, p, length):
