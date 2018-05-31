@@ -5,6 +5,11 @@ import hashlib
 
 myRandInt = random.SystemRandom().randint
 
+localTest = True
+if localTest:
+	random.seed(0)
+	myRandInt = random.randint
+
 def auxF(h, M, f):
 	if h == 8:
 		hashAlgo = hashlib.sha256

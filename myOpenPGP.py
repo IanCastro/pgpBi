@@ -501,7 +501,7 @@ class myOpenPGP:
 						sig = self.asymmetricKeys[-1].packet
 						sig += binascii.unhexlify('b4' + '{0:0{1}x}'.format(len(self.userId), 8))
 						sig += self.userId
-						
+
 						asymKeys = [self.asymmetricKeys[-1]]
 					elif signatureType == 0x00:
 						sig = self.encodedFile[self.paketStart:self.paketEnd]
@@ -569,7 +569,7 @@ class myOpenPGP:
 		version = chr(4)
 		publicKeyAlgo = chr(1)
 		hashAlgoId = chr(8)
-		hashedSubpacket = self.makeSubPacket({33: chr(4) + self.asymKey.fingerPrint, 2: 'Z\xb9\x9c?'})#Util.TIMENOW()#Util.int2str256(int(time.time()), 4)
+		hashedSubpacket = self.makeSubPacket({33: chr(4) + self.asymKey.fingerPrint, 2: Util.TIMENOW()})#'Z\xb9\x9c?'#Util.int2str256(int(time.time()), 4)
 		hashedSubpacketLen = Util.int2str256(len(hashedSubpacket), 2)
 
 		fistPart = (version
@@ -790,9 +790,9 @@ class myOpenPGP:
 			exit(1)
 		return self
 
-	def savefile(self, fileName, armor = False):
+	def savefile(self, fileName, armor = None):
 		if armor:
-			self.encodeAsc()
+			self.encodeAsc(armor)
 			fileName += '.asc'
 		else:
 			fileName += '.gpg'
