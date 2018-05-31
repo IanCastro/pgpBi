@@ -69,12 +69,15 @@ class myOpenPGP:
 		s2kConventions = chr(254)
 		symEncAlgo = chr(7)
 
+		self.asymKey = self.asymmetricKeys[-1]
+		asymKey = self.asymKey.subKeys[-1] if isSubKey else self.asymKey
+
 		return (self.write_publicKeyPaket(isSubKey)
 			+ s2kConventions
 			+ symEncAlgo
-			+ self.asymKey.s2k.getPaket()
-			+ self.asymKey.IV
-			+ self.asymKey.encrData)#getEncrData
+			+ asymKey.s2k.getPaket()
+			+ asymKey.IV
+			+ asymKey.encrData)#getEncrData
 
 	def read_publicKeyPaket(self, p, isSubKey = False):
 		#5.5.2.  Public-Key Packet Formats//Tag 6 or Tag 14
@@ -140,11 +143,12 @@ class myOpenPGP:
 		publicKeyAlgo = chr(1)
 
 		self.asymKey = self.asymmetricKeys[-1]
+		asymKey = self.asymKey.subKeys[-1] if isSubKey else self.asymKey
 		return (version
-			+ self.asymKey.dateCreated
+			+ asymKey.dateCreated
 			+ publicKeyAlgo
-			+ Util.toMPI(self.asymKey.nStrRSA)
-			+ Util.toMPI(self.asymKey.eStrRSA))
+			+ Util.toMPI(asymKey.nStrRSA)
+			+ Util.toMPI(asymKey.eStrRSA))
 
 	def allKeys(self):
 		for asymKey in self.asymmetricKeys:
@@ -184,9 +188,11 @@ class myOpenPGP:
 				# MM = Util.int2str256(MM)
 
 				# for asymKey in self.asymmetricKeys:
+				numTry = 0
 				for asymKey in self.allKeys():
 					if asymKey.keyId != keyId:
 						continue
+					numTry = numTry + 1
 					MM = asymKey.decodeRSA(mRSA, 'this is a pass')
 					# MM = self.asymmetricKeys[0].decodeRSA(mRSA, 'this is a pass')
 					# MM = MM[MM.find(chr(0)):]
@@ -207,7 +213,11 @@ class myOpenPGP:
 					#print('self.symKey', binascii.hexlify(self.symKey))
 					break
 				else:
-					print '>>>>>>>>>>>>>>>>>>>> checksum of symmetric-key does not match <<<<<<<<<<<<<<<<<<<<'
+					if numTry > 0:
+						print '>>>>>>>>>>>>>>>>>>>> checksum of symmetric-key does not match <<<<<<<<<<<<<<<<<<<<'
+						exit(1)
+					print 'self.keyId',binascii.hexlify(keyId)
+					print '>>> not has the key for this criptografy, len(self.asymmetricKeys)',len(self.asymmetricKeys)
 					exit(1)
 			elif publicKeyAlgo == 16:
 				print '''5.5.2.  Public-Key Packet Formats Elgamal public key'''
@@ -239,7 +249,7 @@ class myOpenPGP:
 		MM = chr(self.symAlgo) + self.symKey + Util.int2str256(checkSum, 2)
 		MM = Util.EME_PKCS1_v1_5_ENCODE(MM, self.asymKey.messegeLen)
 		mRSA = self.asymKey.encodeRSA(MM)
-		
+
 		return (version
 			+ self.asymKey.keyId
 			+ publicKeyAlgo
@@ -523,6 +533,7 @@ class myOpenPGP:
 					if len(asymKeys) == 0:
 						print 'self.keyId',binascii.hexlify(self.keyId)
 						print '>>> not has the key for this signature <<<',len(self.asymmetricKeys)
+						exit(1)
 					elif len(asymKeys) > 1:
 						print '>>> has multiples possibilities of key for this signature <<<',len(self.asymmetricKeys)
 						exit(1)
@@ -573,6 +584,13 @@ class myOpenPGP:
 
 		if signatureType == 0x00:
 			sig = self.literalData
+		elif signatureType == 0x13:
+			sig = self.asymmetricKeys[-1].packet
+			sig += binascii.unhexlify('b4' + '{0:0{1}x}'.format(len(self.userId), 8))
+			sig += self.userId
+		elif signatureType == 0x18:
+			sig = self.asymKey.packet
+			sig += self.asymKey.subKeys[-1].packet
 		else:
 			print '''Not Implemented(write) yet signatureType''' , hex(signatureType)
 			exit(1)
@@ -710,6 +728,8 @@ class myOpenPGP:
 			return self.write_SignaturePacket(tagInfo[1])
 		elif tag == 5:
 			return self.write_secretKeyPaket()
+		elif tag == 7:
+			return self.write_secretKeyPaket(isSubKey = True)
 		elif tag == 13:
 			return self.write_UserIDPacket()
 		else:
@@ -770,7 +790,12 @@ class myOpenPGP:
 			exit(1)
 		return self
 
-	def savefile(self, fileName):
+	def savefile(self, fileName, armor = False):
+		if armor:
+			self.encodeAsc()
+			fileName += '.asc'
+		else:
+			fileName += '.gpg'
 		open(fileName, "wb").write(self.encodedFile)
 		return self
 
