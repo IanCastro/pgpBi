@@ -49,6 +49,9 @@ def auxF2(h, M, f):
 						print 'ji:',j,i,hashAlgo(M[j: i]).hexdigest()
 	print '!ji'
 
+def powModR(b, e, m):
+	return 1 if e == 0 else powModR(b*b%m, e//2, m)*(1 if e%2 == 0 else b)%m
+
 def powMod(b, e, mod):
 	#print('e', e)
 	o = 1
@@ -59,6 +62,25 @@ def powMod(b, e, mod):
 		a = (a*a)%mod
 		e //= 2
 	return o
+
+def invMod(b, mod):
+	x, y, g = gcdE(b, mod)
+	return (x+mod)%mod if g == 1 else 0
+
+def gcdER(a, b):
+	if b == 0:
+		return 1, 0, a
+	x, y, g = gcdER(b, a%b)
+	return y, x - y*(a//b), g
+
+def gcdE(a, b):
+	x0, y0 = 1, 0
+	x1, y1 = 0, 1
+	while b != 0:
+		x0, x1 = x1, x0 - x1*(a//b)
+		y0, y1 = y1, y0 - y1*(a//b)
+		a, b = b, a%b
+	return x0, y0, a
 
 def blockSize(algo):
 	# 9.2.  Symmetric-Key Algorithms
@@ -94,15 +116,13 @@ def toMPI(data):
 	return int2str256(length, 2) + data[p:]
 	
 def int2str256(longInt, length):
-	return binascii.unhexlify("{0:0{1}x}".format(longInt, length*2));
-	# if longInt == 0:
-	# 	return chr(0)
-	str = ''
-	# while longInt > 0:
-	for _ in range(length):
-		str += chr(longInt%256)
-		longInt /= 256
-	return str[::-1]
+	if length == 0:
+		s = "{0:x}".format(longInt)
+		if len(s) % 2 == 1:
+			s = '0' + s
+	else:
+		s = "{0:0{1}x}".format(longInt, length*2)
+	return binascii.unhexlify(s)
 
 def EME_PKCS1_v1_5_DECODE(EM):
 	#13.1.2.  EME-PKCS1-v1_5-DECODE
@@ -120,8 +140,7 @@ def EME_PKCS1_v1_5_ENCODE(M, k):
 		print '>>>>>>>>>>>>>>>>>>>> EME-PKCS1-v1_5-ENCODE message too long <<<<<<<<<<<<<<<<<<<<'
 		exit(1)
 
-	randCharNon0 = lambda : chr(myRandInt(1,255))
-	PS = ''.join(randCharNon0() for i in range(psLen))
+	PS = ''.join(chr(myRandInt(1,255)) for i in range(psLen))
 	return chr(0) + chr(2) + PS + chr(0) + M
 
 def EMSA_PKCS1_v1_5(M, hashAlgo, length):
@@ -154,3 +173,9 @@ def hashAlgo(algo):
 	else:
 		print '''9.4.  Hash Algorithms''', algo
 		exit(1)
+
+def display(msg, str256):
+	print msg + ':', binascii.hexlify(str256)
+
+def randOctets(n):
+	return ''.join(chr(myRandInt(0,255)) for i in range(n))

@@ -4,9 +4,6 @@ import random
 import Util
 from myOpenPGP import myOpenPGP
 
-#class MyException(Exception):
-#    pass
-
 
 secretKeyFile = open("secretKey.asc", "rb").read()
 publicKeyQWFile = open("publicKeyQW.asc", "rb").read()#open("qwPk.gpg", "rb").read()
@@ -23,20 +20,22 @@ if praTestar:
 	myOpenPGP().readFile(ExampleFile)
 	myOpenPGP().readFile(publicKeyQWFile).readFile(File2File)
 	myOpenPGP().readFile(secretKeyFile).readFile(ml2File)
-	print myOpenPGP().readFile(publicKeyQWFile).writeFile([[1], [18]]).savefile("file.txt", armor = 'MESSAGE').encodedFile
+	print myOpenPGP().readFile(publicKeyQWFile).writeFile([[1], [18]]).saveFile("file.txt", armor = 'MESSAGE').encodedFile
 	FileFile = open("file.txt.asc", "rb").read()
-	myOpenPGP().readFile(secretKeyFile).writeFile([[4], [11], [2, 0x00]]).savefile("mySign", armor = 'MESSAGE')
+	myOpenPGP().readFile(secretKeyFile).writeFile([[4], [11], [2, 0x00]]).saveFile("mySign", armor = 'MESSAGE')
 	mySignFile = open("mySign.asc", "rb").read()
 	myOpenPGP().readFile(publicKeyQWFile).readFile(mySignFile)
 	myOpenPGP().readFile(rnKeyFile).readFile(compressZipFile)
-	myOpenPGP().readFile(secretKeyFile).writeFile([[5], [13], [2, 0x13], [7], [2, 0x18]]).savefile("genSecrKey")
+	myOpenPGP().readFile(secretKeyFile).writeFile([[5, -1], [13], [2, 0x13], [7, -1, 0], [2, 0x18]]).saveFile("genSecrKey")
 	genSecrKeyFile = open("genSecrKey.gpg", "rb").read()
 	myOpenPGP().readFile(genSecrKeyFile).readFile(mTxtFile)
-	myOpenPGP().readFile(secretKeyFile).writeFile([[5], [13], [2, 0x13], [7], [2, 0x18]]).savefile("genSecrKey", armor = 'PRIVATE KEY BLOCK')
+	myOpenPGP().readFile(secretKeyFile).writeFile([[5, -1], [13], [2, 0x13], [7, -1, 0], [2, 0x18]]).saveFile("genSecrKey", armor = 'PRIVATE KEY BLOCK')
 	genSecrKeyAscFile = open("genSecrKey.asc", "rb").read()
 	myOpenPGP().readFile(genSecrKeyAscFile).readFile(FileFile)
+	myOpenPGP().generateKeyRSA("myUser <my@user.com>", 'this is a pass').savePrivateKey("user", "mySecrKey", True)
+	mySecrKeyAscFile = open("mySecrKey.asc", "rb").read()
+	myOpenPGP().readFile(mySecrKeyAscFile)
+	print "== OK"
 else:
-	# genSecrKeyFile = open("genSecrKey.asc", "rb").read()
-	myOpenPGP().readFile(secretKeyFile).writeFile([[5], [13], [2, 0x13], [7], [2, 0x18]]).savefile("genSecrKey")
-	genSecrKeyFile = open("genSecrKey.gpg", "rb").read()
-	myOpenPGP().readFile(genSecrKeyFile)
+	myOpenPGP().generateKeyRSA("myUser <my@user.com>", 'this is a pass').savePrivateKey("user", "mySecrKey", True)
+	myOpenPGP().readFile(open("mySecrKey.asc", "rb").read())
