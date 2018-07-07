@@ -21,10 +21,6 @@ class myOpenPGP:
 		self.asymmetricKeys = asymmetricKeys
 		return self
 
-	def setAsymKey(self, index, subIndex = None):
-		self.asymKey = self.asymmetricKeys[index] if subIndex == None else self.asymmetricKeys[index].subKeys[subIndex]
-		return self
-
 	def generateKeyRSA(self, userId, passphrase):
 		print 'generateKeyRSA'
 		asymmetricKey = RSAOpenPGP().generate(passphrase)
