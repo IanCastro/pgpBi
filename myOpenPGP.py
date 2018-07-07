@@ -21,6 +21,10 @@ class myOpenPGP:
 		self.asymmetricKeys = asymmetricKeys
 		return self
 
+	def setAsymKey(self, index, subIndex = None):
+		self.asymKey = self.asymmetricKeys[index] if subIndex == None else self.asymmetricKeys[index].subKeys[subIndex]
+		return self
+
 	def generateKeyRSA(self, userId, passphrase):
 		print 'generateKeyRSA'
 		asymmetricKey = RSAOpenPGP().generate(passphrase)
@@ -141,20 +145,18 @@ class myOpenPGP:
 	def write_Public_Key_Encrypted_Session_Key_Packets(self):
 		#5.1.  Public-Key Encrypted Session Key Packets (Tag 1)
 		version = chr(3)
-		publicKeyAlgo = chr(1)
 
 		self.symKey = binascii.unhexlify("4bcb9206f7b3064d15f83c8f1399c4367a6bf57251ee1f5d2a19a4abcef34659")#generate a new key
 		checkSum = Util.SampleChecksum(self.symKey)
 		self.symAlgo = 9
 
-		self.asymKey = self.asymmetricKeys[0].subKeys[0]
 		MM = chr(self.symAlgo) + self.symKey + Util.int2str256(checkSum, 2)
 		MM = Util.EME_PKCS1_v1_5_ENCODE(MM, self.asymKey.messegeLen)
 		mRSA = self.asymKey.encodeRSA(MM)
 
 		return (version
 			+ self.asymKey.keyId
-			+ publicKeyAlgo
+			+ chr(self.asymKey.publicKeyAlgo)
 			+ Util.toMPI(mRSA))
 
 	def read_SymEncryptedIntegrityProtectedDataPacket(self, p, pEnd):
@@ -172,11 +174,7 @@ class myOpenPGP:
 				bs = Util.blockSize(self.symAlgo)
 				lack = bs - len(encrData)%bs
 				# print 'lack',lack
-				if lack != bs:
-					encrData += '0'*lack
-					data = AES.new(self.symKey, AES.MODE_CFB, chr(0)*bs, segment_size = 128).decrypt(encrData)[:-lack]
-				else:
-					data = AES.new(self.symKey, AES.MODE_CFB, chr(0)*bs, segment_size = 128).decrypt(encrData)
+				data = AES.new(self.symKey, AES.MODE_CFB, chr(0)*bs, segment_size = 128).decrypt(encrData + ' '*lack)[:-lack]
 			else:
 				print '''Not Implemented yet'''
 				exit(1)
@@ -192,22 +190,18 @@ class myOpenPGP:
 			exit(1)
 		return p
 
-	def write_SymEncryptedIntegrityProtectedDataPacket(self):
+	def write_SymEncryptedIntegrityProtectedDataPacket(self, tags):
 		#5.13.  Sym. Encrypted Integrity Protected Data Packet (Tag 18)
 		version = chr(1)
 
 		IV = ''.join(chr(Util.myRandInt(0,255)) for i in range(16))
 		IV += IV[-2:]
 
-		data = IV + myOpenPGP().writeFile([[11], [19]], IV).encodedFile
+		data = IV + myOpenPGP().writeFile(tags, IV).encodedFile
 
 		bs = Util.blockSize(self.symAlgo)
 		lack = bs - len(data)%bs
-		if lack != bs:
-			data += '0'*lack
-			encrData = AES.new(self.symKey, AES.MODE_CFB, chr(0)*bs, segment_size = 128).encrypt(data)[:-lack]
-		else:
-			encrData = AES.new(self.symKey, AES.MODE_CFB, chr(0)*bs, segment_size = 128).encrypt(data)
+		encrData = AES.new(self.symKey, AES.MODE_CFB, chr(0)*bs, segment_size = 128).encrypt(data + ' '*lack)[:-lack]
 
 		return version + encrData
 
@@ -459,18 +453,16 @@ class myOpenPGP:
 			exit(1)
 		return p
 
-	def write_SignaturePacket(self, signatureType):
+	def write_SignaturePacket(self, signatureType, hashAlgoId):
 		# 5.2.  Signature Packet (Tag 2)
 		version = chr(4)
-		publicKeyAlgo = chr(1)
-		hashAlgoId = chr(8)
 		hashedSubpacket = self.makeSubPacket({33: chr(4) + self.asymKey.fingerPrint, 2: Util.TIMENOW()})#'Z\xb9\x9c?'#Util.int2str256(int(time.time()), 4)
 		hashedSubpacketLen = Util.int2str256(len(hashedSubpacket), 2)
 
 		fistPart = (version
 			+ chr(signatureType)
-			+ publicKeyAlgo
-			+ hashAlgoId
+			+ chr(self.asymKey.publicKeyAlgo)
+			+ chr(hashAlgoId)
 			+ hashedSubpacketLen
 			+ hashedSubpacket)
 
@@ -493,11 +485,11 @@ class myOpenPGP:
 		sig += fistPart
 		sig += binascii.unhexlify("04ff")
 		sig += binascii.unhexlify('{0:0{1}x}'.format(len(fistPart), 8))
-		hld = hashlib.sha256(sig).digest()
+		hld = Util.hashAlgo(hashAlgoId)(sig).digest()
 
 		signedHashValue = hld[:2]
 
-		mm2 = Util.EMSA_PKCS1_v1_5(hld, ord(hashAlgoId), self.asymKey.messegeLen)
+		mm2 = Util.EMSA_PKCS1_v1_5(hld, hashAlgoId, self.asymKey.messegeLen)
 		mm = self.asymKey.signRSA(mm2, 'this is a pass')
 
 		return (fistPart
@@ -560,19 +552,15 @@ class myOpenPGP:
 			exit(1)
 		return p
 
-	def write_One_Pass_Signature_Packets(self):
+	def write_One_Pass_Signature_Packets(self, signatureType, hashAlgoId):
 		# 5.4.  One-Pass Signature Packets (Tag 4)
 		version = chr(3)
-		signatureType = chr(0)
-		hashAlgoId = chr(8)
-		publicKeyAlgo = chr(1)
 		flagLastOnePass = chr(1)
 
-		self.asymKey = self.asymmetricKeys[0]
 		return (version
-			+ signatureType
-			+ hashAlgoId
-			+ publicKeyAlgo
+			+ chr(signatureType)
+			+ chr(hashAlgoId)
+			+ chr(self.asymKey.publicKeyAlgo)
 			+ self.asymKey.keyId
 			+ flagLastOnePass)
 
@@ -603,7 +591,7 @@ class myOpenPGP:
 		elif tag == 4:
 			return self.read_One_Pass_Signature_Packets(p)
 		else:
-			print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!tag', tag)
+			print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!tag readTag', tag)
 			print('!length', length)
 			exit(1)
 
@@ -612,23 +600,27 @@ class myOpenPGP:
 		if tag == 1:
 			return self.write_Public_Key_Encrypted_Session_Key_Packets()
 		elif tag == 18:
-			return self.write_SymEncryptedIntegrityProtectedDataPacket()
+			return self.write_SymEncryptedIntegrityProtectedDataPacket(tagInfo[1])
 		elif tag == 11:
-			return self.write_LiteralDataPacket("file.txt")
+			return self.write_LiteralDataPacket(tagInfo[1])
 		elif tag == 19:
 			return self.write_ModificationDetectionCodePacket()
 		elif tag == 4:
-			return self.write_One_Pass_Signature_Packets()
+			return self.write_One_Pass_Signature_Packets(tagInfo[1], tagInfo[2])
 		elif tag == 2:
-			return self.write_SignaturePacket(tagInfo[1])
+			return self.write_SignaturePacket(tagInfo[1], tagInfo[2])
 		elif tag == 5:
 			return self.write_secretKeyPaket(tagInfo[1])
 		elif tag == 7:
 			return self.write_secretKeyPaket(tagInfo[1], tagInfo[2])
+		elif tag == 6:
+			return self.write_publicKeyPaket(tagInfo[1])
+		elif tag == 14:
+			return self.write_publicKeyPaket(tagInfo[1], tagInfo[2])
 		elif tag == 13:
 			return self.write_UserIDPacket()
 		else:
-			print('!tag', tag)
+			print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!tag writeTag', tag)
 			exit(1)
 			
 	def crc24(self, octets):
@@ -694,7 +686,7 @@ class myOpenPGP:
 		open(fileName, "wb").write(self.encodedFile)
 		return self
 
-	def savePrivateKey(self, userId, fileName, armor):
+	def savePrivateKey(self, userId, fileName, armor = False):
 		tags = []
 		for i, asymKey in enumerate(self.asymmetricKeys):
 			if userId.lower() not in asymKey.userId.lower():
@@ -703,15 +695,65 @@ class myOpenPGP:
 				continue
 			tags.append([5, i])
 			tags.append([13])
-			tags.append([2, 0x13])
+			tags.append([2, 0x13, 8])
 			for j in range(len(asymKey.subKeys)):
 				tags.append([7, i, j])
-				tags.append([2, 0x18])
+				tags.append([2, 0x18, 8])
 
 		self.writeFile(tags)
-		
 		if armor:
 			self.saveFile(fileName, 'PRIVATE KEY BLOCK')
+		else:
+			self.saveFile(fileName)
+		return self
+
+	def savePublicKey(self, userId, fileName, armor = False):
+		tags = []
+		for i, asymKey in enumerate(self.asymmetricKeys):
+			if userId.lower() not in asymKey.userId.lower():
+				continue
+			tags.append([6, i])
+			tags.append([13])
+			tags.append([2, 0x13, 8])
+			for j in range(len(asymKey.subKeys)):
+				tags.append([14, i, j])
+				tags.append([2, 0x18, 8])
+
+		self.writeFile(tags)
+		if armor:
+			self.saveFile(fileName, 'PUBLIC KEY BLOCK')
+		else:
+			self.saveFile(fileName)
+		return self
+
+	def signFile(self, signFile, userId, fileName, armor = False):
+		tags = []
+		for i, asymKey in enumerate(self.asymmetricKeys):
+			if userId.lower() not in asymKey.userId.lower():
+				continue
+			self.asymKey = asymKey
+			signatureType = 0x00
+			hashAlgoId = 8
+			tags = [[4, signatureType, hashAlgoId], [11, signFile], [2, signatureType, hashAlgoId]]
+
+		self.writeFile(tags)
+		if armor:
+			self.saveFile(fileName, 'MESSAGE')
+		else:
+			self.saveFile(fileName)
+		return self
+
+	def encrypt(self, encryptFile, userId, fileName, armor = False):
+		tags = []
+		for i, asymKey in enumerate(self.asymmetricKeys):
+			if userId.lower() not in asymKey.userId.lower():
+				continue
+			self.asymKey = asymKey.subKeys[0]
+			tags = [[1], [18, [[11, encryptFile], [19]]]]
+
+		self.writeFile(tags)
+		if armor:
+			self.saveFile(fileName, 'MESSAGE')
 		else:
 			self.saveFile(fileName)
 		return self

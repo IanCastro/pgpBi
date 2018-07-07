@@ -125,7 +125,7 @@ class RSAOpenPGP:
 		symKey = self.s2k.makeKey(bs, passphrase)
 		lack = bs - len(data)%bs
 
-		self.encrData = AES.new(symKey, AES.MODE_CFB, self.IV, segment_size = 128).encrypt(data + chr(0)*lack)[:-lack]
+		self.encrData = AES.new(symKey, AES.MODE_CFB, self.IV, segment_size = 128).encrypt(data + ' '*lack)[:-lack]
 
 		body = (chr(self.version)
 			+ self.dateCreated
@@ -149,7 +149,7 @@ class RSAOpenPGP:
 		# 9.2.  Symmetric-Key Algorithms
 		if self.symEncAlgo == 7:
 			# AES with 128-bit key
-			data = AES.new(symKey, AES.MODE_CFB, self.IV, segment_size = 128).decrypt(self.encrData + chr(0)*lack)[:-lack]
+			data = AES.new(symKey, AES.MODE_CFB, self.IV, segment_size = 128).decrypt(self.encrData + ' '*lack)[:-lack]
 		else:
 			print '''9.2.  Symmetric-Key Algorithms'''
 			exit(1)
