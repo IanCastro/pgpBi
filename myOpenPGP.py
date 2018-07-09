@@ -166,21 +166,6 @@ class myOpenPGP:
 				#rsa
 				p, mRSA = Util.leMPI(self.encodedFile, p)
 
-				# dRSA = '154044aacf00149f8fc3988ef1a993625afd993d648c739129c8633def54662162388da2926210f694ffaeb1e6b128c9c616b07062aae0f932b4d80095e2fe693d21d6430b00393b875f506bc7dfaa73555e930677dfc4688ce73d4b5cdb6cc677c8324dfeccae1f64b7bc26f6e021009b376c5f5be999597db97826d72dc7cb8874484b3b7e8e5263fc3cbf442d0beb3e4fe7e8356cd3ddec0302811ba7f4cf73b3afd98b7f0bd9a93123edd52ebadb0b570fd5ecacc715386469d5666d0d0d53c7bfa325f060cd804d2946ec4d0ad1e99326a3a290ceeb4dd6f79fb8211a30db04764e5bd3bc0e1394b7faead134471df0d07b3179b68a07624385c03d3ff1'
-				# nRSA = '9fed7a4e822a2c4a44618c1aef09ec36ce64565663ea12d4f581c599378dfbf75e2401ade55b277be405b1a55a348431c3c7b11289a47a59cc0eb8180b0a6e09c68fb3b65e8c14dd419f8b35d1af23bb43fa12d0a76416c324c1151c17c68c5d8e66dc735367394808167c0b6fa2de3af25117d1cc069029d55fb266f4dcbcf27726dad9f323b7a79e8bdb874f9320074202d4d4209366bb6f9afea0bb9fa9f0d2f8c606e96cb71e8746bdd651b78754c95b96de0708aa87b121d5c5ab155591285ce95f9145b4d17496dbd63a9f50e3f7d8a4a0d9792686cdcaeb0aed5e3ce7232eb3a13527744ef107ee675fdca8a4b1556f3fa3bdfb4e0edd77c0fe46e16d'
-				# #dRSA e nRSA from private key packet
-				# dRSA = binascii.unhexlify(dRSA)
-				# nRSA = binascii.unhexlify(nRSA)
-
-				# print('mRSA', binascii.hexlify(mRSA))
-				# print('dRSA', binascii.hexlify(dRSA))
-				# print('nRSA', binascii.hexlify(nRSA))
-				# mRSA = Util.toint(mRSA)
-				# dRSA = Util.toint(dRSA)
-				# nRSA = Util.toint(nRSA)
-				# MM = Util.powMod(mRSA, dRSA, nRSA)
-				# MM = Util.int2str256(MM)
-
 				# for asymKey in self.asymmetricKeys:
 				numTry = 0
 				for asymKey in self.allKeys():
@@ -188,12 +173,7 @@ class myOpenPGP:
 						continue
 					numTry = numTry + 1
 					MM = asymKey.decodeRSA(mRSA, 'this is a pass')
-					# MM = self.asymmetricKeys[0].decodeRSA(mRSA, 'this is a pass')
-					# MM = MM[MM.find(chr(0)):]
 					MM = Util.EME_PKCS1_v1_5_DECODE(MM)
-					# print('sum', reduce(lambda x,y:x+ord(y), MM[2:-2], 0))
-					# print('check', Util.toint(MM[-2:]))
-					#x+ord(y) mod 65k
 					if MM == "" or Util.SampleChecksum(MM[1:-2]) != Util.toint(MM[-2:]):
 						# print 'MM',binascii.hexlify(MM)
 						# print Util.SampleChecksum(MM[1:-2])

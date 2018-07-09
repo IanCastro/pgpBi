@@ -21,7 +21,7 @@ if praTestar:
 	myOpenPGP().readFile(ExampleFile)
 	myOpenPGP().readFile(publicKeyQWFile).readFile(File2File)
 	myOpenPGP().readFile(secretKeyFile).readFile(ml2File)
-	print myOpenPGP().readFile(publicKeyQWFile).encrypt("file.txt", "", "file.txt", True)
+	myOpenPGP().readFile(publicKeyQWFile).encrypt("file.txt", "", "file.txt", True)
 	FileFile = open("file.txt.asc", "rb").read()
 	myOpenPGP().readFile(secretKeyFile).signFile("file.txt", "", "mySign", passphase, True)
 	mySignFile = open("mySign.asc", "rb").read()

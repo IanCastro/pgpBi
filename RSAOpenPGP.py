@@ -217,7 +217,7 @@ def isCompMiller(n):
 	while m % 2 == 0:
 		m //= 2
 		k += 1
-	for i in range(100):
+	for i in range(50):
 		b = Util.myRandInt(2, n - 2)
 		r = Util.powMod(b, m, n)
 		if r == 1:
