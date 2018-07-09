@@ -14,6 +14,7 @@ rnKeyFile = open("rnKey.asc", "rb").read()
 ExampleFile = open("Example.asc", "rb").read()
 mTxtFile = open("m.txt.asc", "rb").read()
 
+passphase = "this is a pass"
 
 praTestar = True
 if praTestar:
@@ -22,25 +23,24 @@ if praTestar:
 	myOpenPGP().readFile(secretKeyFile).readFile(ml2File)
 	print myOpenPGP().readFile(publicKeyQWFile).encrypt("file.txt", "", "file.txt", True)
 	FileFile = open("file.txt.asc", "rb").read()
-	myOpenPGP().readFile(secretKeyFile).signFile("file.txt", "", "mySign", True)
+	myOpenPGP().readFile(secretKeyFile).signFile("file.txt", "", "mySign", passphase, True)
 	mySignFile = open("mySign.asc", "rb").read()
 	myOpenPGP().readFile(publicKeyQWFile).readFile(mySignFile)
 	myOpenPGP().readFile(rnKeyFile).readFile(compressZipFile)
-	myOpenPGP().readFile(secretKeyFile).savePrivateKey("", "genSecrKey")
+	myOpenPGP().readFile(secretKeyFile).savePrivateKey("", "genSecrKey", passphase)
 	genSecrKeyFile = open("genSecrKey.gpg", "rb").read()
 	myOpenPGP().readFile(genSecrKeyFile).readFile(mTxtFile)
-	myOpenPGP().readFile(secretKeyFile).savePrivateKey("", "genSecrKey", True)
+	myOpenPGP().readFile(secretKeyFile).savePrivateKey("", "genSecrKey", passphase, True)
 	genSecrKeyAscFile = open("genSecrKey.asc", "rb").read()
 	myOpenPGP().readFile(genSecrKeyAscFile).readFile(FileFile)
-	myOpenPGP().generateKeyRSA("myUser <my@user.com>", 'this is a pass').savePrivateKey("user", "mySecrKey", True).savePublicKey("user", "myPublKey").signFile("file2.txt", "my@user.com", "euSign")
+	myOpenPGP().generateKeyRSA("myUser <my@user.com>", 'this is a pass').savePrivateKey("user", "mySecrKey", passphase, True).savePublicKey("user", "myPublKey", passphase).signFile("file2.txt", "my@user.com", "euSign", passphase)
 	myPublKeyAscFile = open("myPublKey.gpg", "rb").read()
 	myOpenPGP().readFile(myPublKeyAscFile).readFile(open("euSign.gpg", "rb").read()).encrypt("file.txt", "my@user.com", "euEncript", True)
 	mySecrKeyAscFile = open("mySecrKey.asc", "rb").read()
 	myOpenPGP().readFile(mySecrKeyAscFile).readFile(open("euEncript.asc", "rb").read())
+	myOpenPGP().readFile(publicKeyQWFile).readFile(publicKeyQWFile).readFile(File2File)
+	myOpenPGP().readFile(publicKeyQWFile).readFile(secretKeyFile).readFile(ml2File).readFile(File2File)
+	myOpenPGP().generateKeyRSA("uu <u@mail.com>", 'pass').savePrivateKey("uu", "changeSKey", "pass").readFile(open("changeSKey.gpg", "rb").read()).readFile(open("changeSKey.gpg", "rb").read()).generateKeyRSA("nn <n@mail.com>", 'pp').readFile(open("changeSKey.gpg", "rb").read()).savePrivateKey("nn", "changeSKey", "pp").readFile(open("changeSKey.gpg", "rb").read())
 	print "== OK"
 else:
-	myOpenPGP().generateKeyRSA("myUser <my@user.com>", 'this is a pass').savePrivateKey("user", "mySecrKey", True).savePublicKey("user", "myPublKey").signFile("file2.txt", "my@user.com", "euSign")
-	myPublKeyAscFile = open("myPublKey.gpg", "rb").read()
-	myOpenPGP().readFile(myPublKeyAscFile).readFile(open("euSign.gpg", "rb").read()).encrypt("file.txt", "my@user.com", "euEncript", True)
-	mySecrKeyAscFile = open("mySecrKey.asc", "rb").read()
-	myOpenPGP().readFile(mySecrKeyAscFile).readFile(open("euEncript.asc", "rb").read())
+	myOpenPGP().start()

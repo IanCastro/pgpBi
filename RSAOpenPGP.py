@@ -37,7 +37,6 @@ class RSAOpenPGP:
 				if p == len(body):
 					self.hasSecretData = False
 				else:
-					self.hasSecretData = True
 					self.readSecret(body[p:])
 			elif publicKeyAlgo == 16:
 				#Elgamal
@@ -64,6 +63,7 @@ class RSAOpenPGP:
 
 	def readSecret(self, body):
 		#5.5.3.  Secret-Key Packet Formats//Tag 5 or Tag 7
+		self.hasSecretData = True
 		self.s2kConventions = ord(body[0])
 		p = 1
 		if self.s2kConventions == 254 or self.s2kConventions == 255:
@@ -79,6 +79,15 @@ class RSAOpenPGP:
 			p += bs
 			
 			self.encrData = body[p:]
+
+	def insertSecretData(self, anotherRSA):
+		self.hasSecretData = True
+		self.s2kConventions = anotherRSA.s2kConventions
+		if self.s2kConventions == 254 or self.s2kConventions == 255:
+			self.symEncAlgo = anotherRSA.symEncAlgo
+			self.s2k = anotherRSA.s2k
+			self.IV = anotherRSA.IV
+			self.encrData = anotherRSA.encrData
 
 	def generate(self, passphrase):
 		self.version = 4
@@ -182,7 +191,7 @@ class RSAOpenPGP:
 		mRSA = Util.powMod(Util.toint(MM), self.eRSA, self.nRSA)
 		return  Util.int2str256(mRSA, self.messegeLen)
 
-	def signRSA(self, mRSA, passphrase):#nao testado
+	def signRSA(self, mRSA, passphrase):
 		if not self.readed:
 			self.leSecretData(passphrase)
 		MM = Util.powMod(Util.toint(mRSA), self.dRSA, self.nRSA)

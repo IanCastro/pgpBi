@@ -5,6 +5,9 @@ import hashlib
 import base64
 import zlib
 import time
+from getpass import getpass
+import os.path
+import logging
 
 import Util
 from RSAOpenPGP import RSAOpenPGP
@@ -16,6 +19,98 @@ class myOpenPGP:
 	def __init__(self):
 		self.asymmetricKeys = []
 		self.keyId = ''
+
+	def start(self):
+		'''
+			.generateKeyRSA("myUser <my@user.com>", 'this is a pass')	-g rsa username e@mail.com pass
+			.readFile(open("euSign.gpg", "rb").read())					-r file.gpg
+			.savePublicKey("user", "myPublKey")							-pk username -a -o output -c zip
+			.savePrivateKey("", "genSecrKey", True)						-sk username -a -o output -c zip
+			.encrypt("file.txt", "my@user.com", "euEncript", True)		-e file username -a -o output -c zip
+			.signFile("file2.txt", "my@user.com", "euSign")				-s file username -a -o output -c zip
+		'''
+		while True:
+			try:
+				commandList = raw_input("Enter the command:").split(" ")
+				commandList = filter(lambda x: x != '', commandList)
+				cLen = len(commandList)
+				if cLen == 0:
+					continue
+				command = commandList[0].lower()
+
+				if command == 'exit':
+					break;
+				elif command == 'generatekey' or command == '-g':
+					algo = raw_input("Algorithm?").lower() if cLen <= 1 else commandList[1]
+					if algo != 'rsa':
+						print'Only RSA Avaliable'
+						continue
+					name = raw_input("User Name?") if cLen <= 2 else commandList[2]
+					email = raw_input("User E-mail?") if cLen <= 3 else commandList[3]
+					passphrase = getpass("Passphase?") if cLen <= 4 else commandList[4]
+
+					self.generateKeyRSA(name + " <" + email + ">", passphrase)
+				elif command == 'readfile' or command == '-r':
+					fileName = raw_input("File Name?") if cLen <= 1 else commandList[1]
+					if os.path.isfile(fileName):
+						self.readFile(open(fileName, "rb").read())
+					else:
+						print fileName, "not is a valid file."
+						continue
+				else:
+					if command == 'encrypt' or command == '-e' or command == 'sign' or command == '-s':
+						inputFile = commandList[1]
+						if not os.path.isfile(inputFile):
+							print inputFile, "not is a valid file"
+							continue
+						p = 2
+					elif command == 'export-key' or command == '-pk' or command == 'export-secret-key' or command == '-sk':
+						p = 1
+					else:
+						raise Exception('command ' + command + ' is not valid')
+
+					user = ''
+					if commandList[p][0] != '-':
+						user = commandList[p]
+						p += 1
+
+					armor = False
+					outputFile = ''
+					compress = ''
+					passphrase = ''
+					confirm = True
+					while p < cLen:
+						if commandList[p] == '-a' or commandList[p] == '--armor':
+							armor = True
+							p += 1
+						elif commandList[p] == '-o' or commandList[p] == '--output':
+							outputFile = commandList[p+1]
+							if outputFile.endswith('.gpg') or outputFile.endswith('.asc'):
+								outputFile = outputFile[: -4]
+							p += 2
+						elif commandList[p] == '-c' or commandList[p] == '--compress':
+							compress = commandList[p+1]
+							p += 2
+						elif commandList[p] == '-p' or commandList[p] == '--pass':
+							passphrase = commandList[p+1]
+							p += 2
+						elif commandList[p] == '-i' or commandList[p] == '--ignore':
+							confirm = False
+							p += 1
+						else:
+							raise Exception('option ' + commandList[p] + ' is not valid')
+
+					if command == 'encrypt' or command == '-e':
+						self.encrypt(inputFile, user, outputFile, armor, confirm)
+					elif command == 'sign' or command == '-s':
+						self.signFile(inputFile, user, outputFile, passphrase, armor, confirm)
+					elif command == 'export-key' or command == '-pk':
+						self.savePublicKey(user, outputFile, passphrase, armor, confirm)
+					elif command == 'export-secret-key' or command == '-sk':
+						self.savePrivateKey(user, outputFile, passphrase, armor, confirm)
+			except Exception as e:
+				print e
+				logging.exception("Something awful happened!")
 
 	def setAsymmetricKeys(self, asymmetricKeys):
 		self.asymmetricKeys = asymmetricKeys
@@ -31,26 +126,23 @@ class myOpenPGP:
 
 	def write_secretKeyPaket(self, keyIndex = -1, subKeyIndex = None):
 		#5.5.3.  Secret-Key Packet Formats//Tag 5 or Tag 7
-		self.asymKey = self.asymmetricKeys[keyIndex]
-		asymKey = self.asymKey.subKeys[subKeyIndex] if subKeyIndex != None else self.asymKey
-
 		return (self.write_publicKeyPaket(keyIndex, subKeyIndex)
-			+ chr(asymKey.s2kConventions)
-			+ chr(asymKey.symEncAlgo)
-			+ asymKey.s2k.packet
-			+ asymKey.IV
-			+ asymKey.encrData)#getEncrData
+			+ chr(self.asymSubKey.s2kConventions)
+			+ chr(self.asymSubKey.symEncAlgo)
+			+ self.asymSubKey.s2k.packet
+			+ self.asymSubKey.IV
+			+ self.asymSubKey.encrData)
 
 	def write_publicKeyPaket(self, keyIndex = -1, subKeyIndex = None):
 		#5.5.2.  Public-Key Packet Formats//Tag 6 or Tag 14
 		self.asymKey = self.asymmetricKeys[keyIndex]
-		asymKey = self.asymKey.subKeys[subKeyIndex] if subKeyIndex != None else self.asymKey
+		self.asymSubKey = self.asymKey.subKeys[subKeyIndex] if subKeyIndex != None else self.asymKey
 
-		return (chr(asymKey.version)
-			+ asymKey.dateCreated
-			+ chr(asymKey.publicKeyAlgo)
-			+ Util.toMPI(asymKey.nStrRSA)
-			+ Util.toMPI(asymKey.eStrRSA))
+		return (chr(self.asymSubKey.version)
+			+ self.asymSubKey.dateCreated
+			+ chr(self.asymSubKey.publicKeyAlgo)
+			+ Util.toMPI(self.asymSubKey.nStrRSA)
+			+ Util.toMPI(self.asymSubKey.eStrRSA))
 
 	def allKeys(self):
 		for asymKey in self.asymmetricKeys:
@@ -295,13 +387,13 @@ class myOpenPGP:
 
 	def read_UserIDPacket(self, p, pEnd):
 		# 5.11.  User ID Packet (Tag 13)
-		self.asymmetricKeys[-1].userId = self.encodedFile[p:pEnd]
-		print 'userId:', self.asymmetricKeys[-1].userId
+		self.asymKey.userId = self.encodedFile[p:pEnd]
+		print 'userId:', self.asymKey.userId
 		return pEnd
 
 	def write_UserIDPacket(self):
 		# 5.11.  User ID Packet (Tag 13)
-		return self.asymmetricKeys[-1].userId
+		return self.asymKey.userId
 
 	def leSubPacket(self, p, pEnd):
 		dataSet = {}
@@ -384,16 +476,16 @@ class myOpenPGP:
 				if publicKeyAlgo == 1 or publicKeyAlgo == 2 or publicKeyAlgo == 3:
 					#rsa
 					if signatureType == 0x18:
-						sig = self.asymmetricKeys[-1].packet
-						sig += self.asymmetricKeys[-1].subKeys[-1].packet
+						sig = self.asymKey.packet
+						sig += self.asymSubKey.packet
 						
-						asymKeys = [self.asymmetricKeys[-1]]
+						asymKeys = [self.asymKey]
 					elif signatureType == 0x13:
-						sig = self.asymmetricKeys[-1].packet
-						sig += binascii.unhexlify('b4' + '{0:0{1}x}'.format(len(self.asymmetricKeys[-1].userId), 8))
-						sig += self.asymmetricKeys[-1].userId
+						sig = self.asymKey.packet
+						sig += binascii.unhexlify('b4' + '{0:0{1}x}'.format(len(self.asymKey.userId), 8))
+						sig += self.asymKey.userId
 
-						asymKeys = [self.asymmetricKeys[-1]]
+						asymKeys = [self.asymKey]
 					elif signatureType == 0x00:
 						sig = self.encodedFile[self.paketStart:self.paketEnd]
 
@@ -417,11 +509,8 @@ class myOpenPGP:
 					hld = hashAlgo(sig).digest()
 					if hld[:2] != signedHashValue:
 						raise OpenPGPIncorrectException('left 16 bits of signed hash', hashAlgo.__name__, hld[:2], signedHashValue)
-
 					if len(asymKeys) == 0:
-						print 'self.keyId',binascii.hexlify(self.keyId)
-						print '>>> not has the key for this signature <<<',len(self.asymmetricKeys)
-						exit(1)
+						raise OpenPGPKeyIdException(self.keyId, len(self.asymmetricKeys))
 					elif len(asymKeys) > 1:
 						print '>>> has multiples possibilities of key for this signature <<<',len(self.asymmetricKeys)
 						exit(1)
@@ -449,7 +538,7 @@ class myOpenPGP:
 			exit(1)
 		return p
 
-	def write_SignaturePacket(self, signatureType, hashAlgoId):
+	def write_SignaturePacket(self, signatureType, hashAlgoId, passphrase):
 		# 5.2.  Signature Packet (Tag 2)
 		version = chr(4)
 		hashedSubpacket = self.makeSubPacket({33: chr(4) + self.asymKey.fingerPrint, 2: Util.TIMENOW()})#'Z\xb9\x9c?'#Util.int2str256(int(time.time()), 4)
@@ -468,12 +557,12 @@ class myOpenPGP:
 		if signatureType == 0x00:
 			sig = self.literalData
 		elif signatureType == 0x13:
-			sig = self.asymmetricKeys[-1].packet
-			sig += binascii.unhexlify('b4' + '{0:0{1}x}'.format(len(self.asymmetricKeys[-1].userId), 8))
-			sig += self.asymmetricKeys[-1].userId
+			sig = self.asymKey.packet
+			sig += binascii.unhexlify('b4' + '{0:0{1}x}'.format(len(self.asymKey.userId), 8))
+			sig += self.asymKey.userId
 		elif signatureType == 0x18:
 			sig = self.asymKey.packet
-			sig += self.asymKey.subKeys[-1].packet
+			sig += self.asymSubKey.packet
 		else:
 			print '''Not Implemented(write) yet signatureType''' , hex(signatureType)
 			exit(1)
@@ -486,7 +575,7 @@ class myOpenPGP:
 		signedHashValue = hld[:2]
 
 		mm2 = Util.EMSA_PKCS1_v1_5(hld, hashAlgoId, self.asymKey.messegeLen)
-		mm = self.asymKey.signRSA(mm2, 'this is a pass')
+		mm = self.asymKey.signRSA(mm2, passphrase)
 
 		return (fistPart
 			+ unhashedSubpacketLen
@@ -566,9 +655,25 @@ class myOpenPGP:
 			keyRSA = RSAOpenPGP().read(self.encodedFile[p:p+length])
 			Util.display('fingerPrint', keyRSA.fingerPrint)
 			if tag == 5 or tag == 6:
-				self.asymmetricKeys.append(keyRSA)
+				for asymKey in self.asymmetricKeys:
+					if asymKey.fingerPrint == keyRSA.fingerPrint and asymKey.nRSA == keyRSA.nRSA:
+						if not asymKey.hasSecretData and keyRSA.hasSecretData:
+							asymKey.insertSecretData(keyRSA)
+						self.asymKey = asymKey
+						break
+				else:
+					self.asymmetricKeys.append(keyRSA)
+					self.asymKey = keyRSA
 			else:
-				self.asymmetricKeys[-1].subKeys.append(keyRSA)
+				for asymSubKey in self.asymKey.subKeys:
+					if asymSubKey.fingerPrint == keyRSA.fingerPrint and asymSubKey.nRSA == keyRSA.nRSA:
+						if not asymSubKey.hasSecretData and keyRSA.hasSecretData:
+							asymSubKey.insertSecretData(keyRSA)
+						self.asymSubKey = asymSubKey
+						break
+				else:
+					self.asymKey.subKeys.append(keyRSA)
+					self.asymSubKey = keyRSA
 			return p + length
 		elif tag == 1:
 			return self.read_Public_Key_Encrypted_Session_Key_Packets(p)
@@ -604,7 +709,7 @@ class myOpenPGP:
 		elif tag == 4:
 			return self.write_One_Pass_Signature_Packets(tagInfo[1], tagInfo[2])
 		elif tag == 2:
-			return self.write_SignaturePacket(tagInfo[1], tagInfo[2])
+			return self.write_SignaturePacket(tagInfo[1], tagInfo[2], tagInfo[3])
 		elif tag == 5:
 			return self.write_secretKeyPaket(tagInfo[1])
 		elif tag == 7:
@@ -673,16 +778,24 @@ class myOpenPGP:
 			exit(1)
 		return self
 
-	def saveFile(self, fileName, armor = None):
+	def saveFile(self, fileName, armor = None, needValidadion = False):
 		if armor:
 			self.encodeAsc(armor)
 			fileName += '.asc'
 		else:
 			fileName += '.gpg'
-		open(fileName, "wb").write(self.encodedFile)
+		if fileName == '.asc' or fileName == '.gpg':
+			print self.encodedFile
+		else:
+			if needValidadion and os.path.isfile(fileName):
+				confirm = raw_input("The " + fileName + " file already exists. Do you want to overwrite it?").lower()
+				if confirm[0] != 'y':
+					print 'File was not saved'
+					return self
+			open(fileName, "wb").write(self.encodedFile)
 		return self
 
-	def savePrivateKey(self, userId, fileName, armor = False):
+	def savePrivateKey(self, userId, fileName, passphrase, armor = False, needValidadion = False):
 		tags = []
 		for i, asymKey in enumerate(self.asymmetricKeys):
 			if userId.lower() not in asymKey.userId.lower():
@@ -691,55 +804,70 @@ class myOpenPGP:
 				continue
 			tags.append([5, i])
 			tags.append([13])
-			tags.append([2, 0x13, 8])
+			tags.append([2, 0x13, 8, passphrase])
 			for j in range(len(asymKey.subKeys)):
 				tags.append([7, i, j])
-				tags.append([2, 0x18, 8])
+				tags.append([2, 0x18, 8, passphrase])
 
-		self.writeFile(tags)
-		if armor:
-			self.saveFile(fileName, 'PRIVATE KEY BLOCK')
+		if tags != []:
+			self.writeFile(tags)
 		else:
-			self.saveFile(fileName)
+			print 'There is no Secret Keys for user', userId
+			return self
+		if armor:
+			self.saveFile(fileName, 'PRIVATE KEY BLOCK', needValidadion)
+		else:
+			self.saveFile(fileName, None, needValidadion)
 		return self
 
-	def savePublicKey(self, userId, fileName, armor = False):
+	def savePublicKey(self, userId, fileName, passphrase, armor = False, needValidadion = False):
 		tags = []
 		for i, asymKey in enumerate(self.asymmetricKeys):
 			if userId.lower() not in asymKey.userId.lower():
 				continue
 			tags.append([6, i])
 			tags.append([13])
-			tags.append([2, 0x13, 8])
+			tags.append([2, 0x13, 8, passphrase])
 			for j in range(len(asymKey.subKeys)):
 				tags.append([14, i, j])
-				tags.append([2, 0x18, 8])
+				tags.append([2, 0x18, 8, passphrase])
 
-		self.writeFile(tags)
-		if armor:
-			self.saveFile(fileName, 'PUBLIC KEY BLOCK')
+		if tags != []:
+			self.writeFile(tags)
 		else:
-			self.saveFile(fileName)
+			print 'There is no Public Keys for user', userId
+			return self
+		if armor:
+			self.saveFile(fileName, 'PUBLIC KEY BLOCK', needValidadion)
+		else:
+			self.saveFile(fileName, None, needValidadion)
 		return self
 
-	def signFile(self, signFile, userId, fileName, armor = False):
+	def signFile(self, signFile, userId, fileName, passphrase, armor = False, needValidadion = False):
 		tags = []
 		for i, asymKey in enumerate(self.asymmetricKeys):
 			if userId.lower() not in asymKey.userId.lower():
 				continue
+			if not asymKey.hasSecretData:
+				continue
 			self.asymKey = asymKey
+			self.asymSubKey = asymKey.subKeys[0]
 			signatureType = 0x00
 			hashAlgoId = 8
-			tags = [[4, signatureType, hashAlgoId], [11, signFile], [2, signatureType, hashAlgoId]]
+			tags = [[4, signatureType, hashAlgoId], [11, signFile], [2, signatureType, hashAlgoId, passphrase]]
 
-		self.writeFile(tags)
-		if armor:
-			self.saveFile(fileName, 'MESSAGE')
+		if tags != []:
+			self.writeFile(tags)
 		else:
-			self.saveFile(fileName)
+			print 'There is no Secret Keys for user', userId
+			return self
+		if armor:
+			self.saveFile(fileName, 'MESSAGE', needValidadion)
+		else:
+			self.saveFile(fileName, None, needValidadion)
 		return self
 
-	def encrypt(self, encryptFile, userId, fileName, armor = False):
+	def encrypt(self, encryptFile, userId, fileName, armor = False, needValidadion = False):
 		tags = []
 		for i, asymKey in enumerate(self.asymmetricKeys):
 			if userId.lower() not in asymKey.userId.lower():
@@ -747,11 +875,15 @@ class myOpenPGP:
 			self.asymKey = asymKey.subKeys[0]
 			tags = [[1], [18, [[11, encryptFile], [19]]]]
 
-		self.writeFile(tags)
-		if armor:
-			self.saveFile(fileName, 'MESSAGE')
+		if tags != []:
+			self.writeFile(tags)
 		else:
-			self.saveFile(fileName)
+			print 'There is no Public Keys for user', userId
+			return self
+		if armor:
+			self.saveFile(fileName, 'MESSAGE', needValidadion)
+		else:
+			self.saveFile(fileName, None, needValidadion)
 		return self
 
 	def len2NewFormat(self, length):
