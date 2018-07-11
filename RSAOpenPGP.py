@@ -163,13 +163,13 @@ class RSAOpenPGP:
 			print '''9.2.  Symmetric-Key Algorithms'''
 			exit(1)
 
+		if hashlib.sha1(data[:-20]).digest() != data[-20:]:
+			raise OpenPGPIncorrectException('passphrase', 'sha1', hashlib.sha1(data[:-20]).digest(), data[-20:])
+
 		p, self.dStrRSA = Util.leMPI(data, 0)
 		p, self.pStrRSA = Util.leMPI(data, p)
 		p, self.qStrRSA = Util.leMPI(data, p)
 		p, self.uStrRSA = Util.leMPI(data, p)
-
-		if hashlib.sha1(data[:p]).digest() != data[p:]:
-			raise OpenPGPIncorrectException('passphrase', 'sha1', hashlib.sha1(data[:p]).digest(), data[p:])
 
 		self.dRSA = Util.toint(self.dStrRSA)
 		self.pRSA = Util.toint(self.pStrRSA)

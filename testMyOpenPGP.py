@@ -26,7 +26,7 @@ if praTestar:
 	myOpenPGP().readFile(secretKeyFile).signFile("file.txt", "", "mySign", passphase, True)
 	mySignFile = open("mySign.asc", "rb").read()
 	myOpenPGP().readFile(publicKeyQWFile).readFile(mySignFile)
-	myOpenPGP().readFile(rnKeyFile).readFile(compressZipFile)
+	myOpenPGP().readFile(publicKeyQWFile).readFile(rnKeyFile).readFile(compressZipFile)
 	myOpenPGP().readFile(secretKeyFile).savePrivateKey("", "genSecrKey", passphase)
 	genSecrKeyFile = open("genSecrKey.gpg", "rb").read()
 	myOpenPGP().readFile(genSecrKeyFile).readFile(mTxtFile)
@@ -41,6 +41,11 @@ if praTestar:
 	myOpenPGP().readFile(publicKeyQWFile).readFile(publicKeyQWFile).readFile(File2File)
 	myOpenPGP().readFile(publicKeyQWFile).readFile(secretKeyFile).readFile(ml2File).readFile(File2File)
 	myOpenPGP().generateKeyRSA("uu <u@mail.com>", 'pass').savePrivateKey("uu", "changeSKey", "pass").readFile(open("changeSKey.gpg", "rb").read()).readFile(open("changeSKey.gpg", "rb").read()).generateKeyRSA("nn <n@mail.com>", 'pp').readFile(open("changeSKey.gpg", "rb").read()).savePrivateKey("nn", "changeSKey", "pp").readFile(open("changeSKey.gpg", "rb").read())
+	myOpenPGP().readFile(secretKeyFile).savePrivateKey("", "genSecrKeyZip", passphase, True, 1).savePublicKey("", "genPublKeyZip", passphase, True, 1).signFile("file.txt", "", "mySignZip", passphase, True, 1)
+	genPublKeyZipFile = open("genPublKeyZip.asc", "rb").read()
+	myOpenPGP().readFile(genPublKeyZipFile).readFile(open("mySignZip.asc", "rb").read()).encrypt("file.txt", "", "fileZip.txt", True, 1)
+	genSecrKeyZipFile = open("genSecrKeyZip.asc", "rb").read()
+	myOpenPGP().readFile(genSecrKeyZipFile).readFile(open("fileZip.txt.asc", "rb").read())
 	print "== OK"
 else:
 	myOpenPGP().start()

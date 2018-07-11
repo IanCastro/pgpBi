@@ -12,5 +12,8 @@ class OpenPGPIncorrectException(Exception):
 
 class OpenPGPKeyIdException(Exception):
 	def __init__(self, keyId, numKeys):
-		msg = "Has " + str(numKeys) + " keys but none of them has the keyId equals as " + binascii.hexlify(keyId) + ", signature cannot be validated."
+		if numKeys > 0:
+			msg = "Has " + str(numKeys) + " keys but none of them has the keyId equals as " + binascii.hexlify(keyId) + ", signature cannot be validated."
+		else:
+			msg = "You do not have any keys, signature cannot be validated."
 		super(OpenPGPKeyIdException, self).__init__(msg)
