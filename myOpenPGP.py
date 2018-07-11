@@ -251,7 +251,7 @@ class myOpenPGP:
 		#5.1.  Public-Key Encrypted Session Key Packets (Tag 1)
 		version = chr(3)
 
-		self.symKey = binascii.unhexlify("4bcb9206f7b3064d15f83c8f1399c4367a6bf57251ee1f5d2a19a4abcef34659")#generate a new key
+		self.symKey = Util.randOctets(32)
 		checkSum = Util.SampleChecksum(self.symKey)
 		self.symAlgo = 9
 
@@ -268,22 +268,16 @@ class myOpenPGP:
 		#5.13.  Sym. Encrypted Integrity Protected Data Packet (Tag 18)
 		version = ord(self.encodedFile[p])
 		p += 1
-		#print('version',version)
 		if version == 1:
 			encrData = self.encodedFile[p: pEnd]
 			p = pEnd
-			# key = '4bcb9206f7b3064d15f83c8f1399c4367a6bf57251ee1f5d2a19a4abcef34659'
-			# key = binascii.unhexlify(key)
 			if self.symAlgo == 7 or self.symAlgo == 8 or self.symAlgo == 9:
-				# print 'l',len(encrData)
 				bs = Util.blockSize(self.symAlgo)
 				lack = bs - len(encrData)%bs
-				# print 'lack',lack
 				data = AES.new(self.symKey, AES.MODE_CFB, chr(0)*bs, segment_size = 128).decrypt(encrData + ' '*lack)[:-lack]
 			else:
 				print '''Not Implemented yet'''
 				exit(1)
-			# print 'data full',binascii.hexlify(data)
 			if data[14:16] != data[16:18]:
 				print '>>>>>>>>>>>>>>>>>>>> session key is incorrect <<<<<<<<<<<<<<<<<<<<'
 				exit(1)
@@ -364,47 +358,14 @@ class myOpenPGP:
 
 	def read_ModificationDetectionCodePacket(self, p):
 		#5.14.  Modification Detection Code Packet (Tag 19)
-		# tex = 'MESSAGE\n'
-		# tex = binascii.unhexlify('ac1562076d6c322e7478745a81a8444d4553534147450a')
-		# print(hashlib.sha1(tex).hexdigest())
-		# tex = binascii.unhexlify('85010c03f7c1f4b58d60352a0108008dd909f507b10e2787c0a046ccbc3b81fca9267ab5d49065ada990789891a21246ea4bbdff21cd8d0bebba6160b7b5e964cc7ca69a02cd8a38333cc8e7c193c05810e9972c64eb170fb46481d82a8f8349a28f3391ab8cd79bd0c42c4dbb3a4c9f777275a62e218c9d8876463983c15c29e95f8962e04a9d581599478d78b5dd29394efafead8c683ad45c094dcce2426525c160ab87b1ef55b4343585657aac8d0477418f705dc77dfee0611c297e5b72ff9e858530885a37b634ed9fb6d4cebba46a937d3957f7d009107f3d1d90404c3f6481db9d4a626102abc36721c46b28841762a45f58330882d4f5e22989512daec1b8e89f867115caccb0de179783d24001805653862a53b4fef15a29427deed7b7e2940650e08a5e9fcc8cdeb03b0411e05dbf9ac2cc1a870aef75d30bc55992b3ab83bd8c5528819f6dc63100174ae7')
-		# tex = ttt
-		# tex = binascii.unhexlify('62a59b039fd0577cb0ff56c38652b977b977ac1562076d6c322e7478745a81a8444d4553534147450ad314549aadbc2b4bee2311e6b47ff06ada69b141b358')
-		# print len(tex)
-		# for i in xrange(len(tex)+1):
-		# 	for j in xrange(i+1):
-		# 		sha = hashlib.sha1(tex[j:i]).hexdigest()
-		# 		print(sha)
-		# 		if '549aadbc2b4bee2311e6b47ff06ada69b141b358' == sha:
-		# 			print(i, j)
-		# 			break
-		# 	else:
-		# 		continue
-		# 	break
-		# else:
-		# 	print False
 		sha = hashlib.sha1(self.extraParam + self.encodedFile[:p]).digest()
 		if sha != self.encodedFile[p:]:
-			# print binascii.hexlify(self.extraParam + self.encodedFile[:p])
-			print '>>>>>>>>>>>>>>>>>>>> Detected Modification on Packet <<<<<<<<<<<<<<<<<<<<'
-			# print binascii.hexlify(sha)
-			# print binascii.hexlify(self.encodedFile[p:])
-			exit(1)
-		# print 'pass MDP'
-		# print(binascii.hexlify(self.encodedFile[p:]))
-		# print(binascii.hexlify(sha))
-
-		# print('binascii.hexlify(self.encodedFile[:p])')
-		# print(binascii.hexlify(self.encodedFile[:p]))
-		# print(hashlib.sha1().hexdigest())
-		# print(sha)
+			raise Exception('Detected Modification on Packet')
 		return p+20
 
 	def write_ModificationDetectionCodePacket(self):
 		#5.14.  Modification Detection Code Packet (Tag 19)
-		# print 'ModificationDetectionCodePacket', binascii.hexlify(self.extraParam + self.encodedFile + chr(20))
-		sha = hashlib.sha1(self.extraParam + self.encodedFile + chr(20)).digest()
-		return sha
+		return hashlib.sha1(self.extraParam + self.encodedFile + chr(20)).digest()
 
 	def read_UserIDPacket(self, p, pEnd):
 		# 5.11.  User ID Packet (Tag 13)
