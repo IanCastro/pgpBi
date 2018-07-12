@@ -94,7 +94,7 @@ class myOpenPGP:
 					print '  (--compress | -c) compression: The compression to be used, only "zip" available'
 					print '  (--pass | -p) passphrase: Passphrase to use the secret key'
 					print ''
-					print 'Obs: passphrase and user containing spaces need to be surrounded by \ "(quotation marks)'
+					print 'Obs: passphrase and user containing spaces need to be surrounded by \"(quotation marks)'
 				else:
 					if command == 'encrypt' or command == '-e' or command == 'sign' or command == '-s':
 						inputFile = commandList[1]
