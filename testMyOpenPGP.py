@@ -1,23 +1,19 @@
-import binascii
-import random
-
-import Util
 from myOpenPGP import myOpenPGP
 
+praTestar = False
+if not praTestar:
+	myOpenPGP().start()
+else:
+	secretKeyFile = open("secretKey.asc", "rb").read()
+	publicKeyQWFile = open("publicKeyQW.asc", "rb").read()#open("qwPk.gpg", "rb").read()
+	ml2File = open("ml2.txt.gpg", "rb").read()
+	File2File = open("file2.txt.asc", "rb").read()
+	compressZipFile = open("compressZip.gpg", "rb").read()
+	rnKeyFile = open("rnKey.asc", "rb").read()
+	ExampleFile = open("Example.asc", "rb").read()
+	mTxtFile = open("m.txt.asc", "rb").read()
+	passphase = "this is a pass"
 
-secretKeyFile = open("secretKey.asc", "rb").read()
-publicKeyQWFile = open("publicKeyQW.asc", "rb").read()#open("qwPk.gpg", "rb").read()
-ml2File = open("ml2.txt.gpg", "rb").read()
-File2File = open("file2.txt.asc", "rb").read()
-compressZipFile = open("compressZip.gpg", "rb").read()
-rnKeyFile = open("rnKey.asc", "rb").read()
-ExampleFile = open("Example.asc", "rb").read()
-mTxtFile = open("m.txt.asc", "rb").read()
-
-passphase = "this is a pass"
-
-praTestar = True
-if praTestar:
 	myOpenPGP().readFile(ExampleFile)
 	myOpenPGP().readFile(publicKeyQWFile).readFile(File2File)
 	myOpenPGP().readFile(secretKeyFile).readFile(ml2File)
@@ -47,5 +43,3 @@ if praTestar:
 	genSecrKeyZipFile = open("genSecrKeyZip.asc", "rb").read()
 	myOpenPGP().readFile(genSecrKeyZipFile).readFile(open("fileZip.txt.asc", "rb").read())
 	print "== OK"
-else:
-	myOpenPGP().start()

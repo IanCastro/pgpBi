@@ -23,57 +23,88 @@ class myOpenPGP:
 		self.asymSubKey = ''
 
 	def start(self):
-		'''
-			.generateKeyRSA("myUser <my@user.com>", 'this is a pass')	-g rsa username e@mail.com pass
-			.readFile(open("euSign.gpg", "rb").read())					-r file.gpg
-			.savePublicKey("user", "myPublKey")							-pk username -a -o output -c zip
-			.savePrivateKey("", "genSecrKey", True)						-sk username -a -o output -c zip
-			.encrypt("file.txt", "my@user.com", "euEncript", True)		-e file username -a -o output -c zip
-			.signFile("file2.txt", "my@user.com", "euSign")				-s file username -a -o output -c zip
-		'''
+		allOptions = ['-a', '--armor', '-i', '--ignore', '-o', '--output', '-c', '--compress', '-p', '--pass']
 		while True:
 			try:
-				commandList = raw_input("Enter the command:").split(" ")
-				commandList = filter(lambda x: x != '', commandList)
-				cLen = len(commandList)
-				if cLen == 0:
+				commandInput = raw_input("Enter the command:").strip()
+				if commandInput == '':
 					continue
+				if commandInput[0] == "\"":
+					raise OpenPGPException("The command cannot start with \"(quotation marks)")
+				commandInput = commandInput.split("\"")
+				commandList = filter(lambda x: x != '', commandInput[0].split(" "))
+				p = 1
+				while p < len(commandInput):
+					commandList += [commandInput[p]]
+					if p+1 >= len(commandInput):
+						raise OpenPGPException("Some \"(quotation marks) was not closed")
+					if commandInput[p+1].strip() != "":
+						commandList += filter(lambda x: x != '', commandInput[p+1].split(" "))
+					p += 2
+				cLen = len(commandList)
 				command = commandList[0].lower()
 
 				if command == 'exit':
 					break;
 				elif command == 'generatekey' or command == '-g':
-					algo = raw_input("Algorithm?").lower() if cLen <= 1 else commandList[1]
-					if algo != 'rsa':
-						print'Only RSA Avaliable'
-						continue
+					algo = raw_input("Algorithm?") if cLen <= 1 else commandList[1]
+					if algo.lower() != 'rsa':
+						raise OpenPGPException('Only RSA Avaliable')
 					name = raw_input("User Name?") if cLen <= 2 else commandList[2]
 					email = raw_input("User E-mail?") if cLen <= 3 else commandList[3]
-					passphrase = getpass("Passphase?") if cLen <= 4 else ' '.join(commandList[4:])
-					if (passphrase[0] == "\""):
-						passphrase = passphrase[1:]
-					if (passphrase[-1] == "\""):
-						passphrase = passphrase[:-1]
+					passphrase = getpass("Passphase?") if cLen <= 4 else commandList[4]
+					if cLen > 5:
+						raise OpenPGPException('There are more arguments than expected')
 
 					self.generateKeyRSA(name + " <" + email + ">", passphrase)
 				elif command == 'readfile' or command == '-r':
 					fileName = raw_input("File Name?") if cLen <= 1 else commandList[1]
+					if cLen > 2:
+						raise OpenPGPException('There are more arguments than expected')
+
 					if os.path.isfile(fileName):
 						self.readFile(open(fileName, "rb").read())
 					else:
-						print fileName, "not is a valid file."
-						continue
+						raise OpenPGPException(fileName + " not is a valid file.")
+				elif command == 'help' or command == '-h':
+					if cLen > 1:
+						print 'Not yet implemented the more detailed help for command', command
+						print 'Here is the basic help:',
+					print 'Commands:'
+					print '(GenerateKey | -g) [Cryptosystem [UserName [e-mail [passphase]]]]'
+					print '(ReadFile | -r) [FileName]'
+					print '(Encrypt | -e) FileName [User] [Options...]'
+					print '(Sign | -s) FileName [User] [Options...]'
+					print '(Export-Key | -pk) [User] [Options...]'
+					print '(Export-Secret-Key | -sk) [User] [Options...]'
+					print '(Help | -h) [command]'
+					print 'Exit'
+					print ''
+					print 'Argumentos:'
+					print 'Cryptosystem: Cryptosystem used to generate the key, only "rsa" avaliable'
+					print 'UserName: name of the owner of the key'
+					print 'e-mail: e-mail of the owner of the key'
+					print 'passphase: sequence of words to protect from other people using the key'
+					print 'FileName: File to be processed'
+					print 'User: UserName or e-mail'
+					print 'Options: one or more of these arguments'
+					print '  (--armor | -a): Convet the output to Base64'
+					print '  (--ignore | -i): Do not ask if you want replace the output file(always replace)'
+					print '  (--output | -o) OutputFile: Set OutputFile as name to save the generated packet'
+					print '  (--compress | -c) compression: The compression to be used, only "zip" available'
+					print '  (--pass | -p) passphrase: Passphrase to use the secret key'
+					print ''
+					print 'Obs: passphrase and user containing spaces need to be surrounded by \ "(quotation marks)'
 				else:
 					if command == 'encrypt' or command == '-e' or command == 'sign' or command == '-s':
 						inputFile = commandList[1]
 						if not os.path.isfile(inputFile):
-							print inputFile, "not is a valid file"
-							continue
+							raise OpenPGPException(inputFile + " not is a valid file")
 						p = 2
 					elif command == 'export-key' or command == '-pk' or command == 'export-secret-key' or command == '-sk':
 						p = 1
 					else:
-						raise Exception('command ' + command + ' is not valid')
+						raise OpenPGPException('Command ' + command + ' is not valid')
 
 					user = ''
 					if commandList[p][0] != '-':
@@ -86,53 +117,34 @@ class myOpenPGP:
 					passphrase = ''
 					confirm = True
 					while p < cLen:
-						if commandList[p] == '-a' or commandList[p] == '--armor':
+						if commandList[p] not in allOptions:
+							raise OpenPGPException('Option ' + commandList[p] + ' is not valid')
+						elif commandList[p] == '-a' or commandList[p] == '--armor':
 							armor = True
 							p += 1
-						elif commandList[p] == '-o' or commandList[p] == '--output':
-							outputFile = commandList[p+1]
-							if outputFile.endswith('.gpg') or outputFile.endswith('.asc'):
-								outputFile = outputFile[: -4]
-							p += 2
-						elif commandList[p] == '-c' or commandList[p] == '--compress':
-							compress = commandList[p+1]
-							if compress == "zip":
-								compress = 1
-							elif compress == "zlib":
-								compress = 2
-							elif compress == "bzip2":
-								compress = 3
-							else:
-								raise Exception('compress must be zip, zlib or bzi2')
-							p += 2
-						elif commandList[p] == '-p' or commandList[p] == '--pass':
-							p += 1
-							if commandList[p][0] != "\"":
-								raise Exception('The passphrase should be surrounded by "(quotation marks)')
-							if len(commandList[p]) == 1:
-								passphrase = ''
-							elif commandList[p][-1] == "\"":
-								passphrase = commandList[p][1:-1]
-								p += 1
-								continue
-							else:
-								passphrase = commandList[p][1:]
-							p += 1
-							while p < cLen:
-								if commandList[p][-1] == "\"":
-									passphrase += ' ' + commandList[p][:-1]
-									p += 1
-									break
-								else:
-									passphrase += ' ' + commandList[p]
-									p += 1
-							else:
-								raise Exception('The passphrase need the unquote')
 						elif commandList[p] == '-i' or commandList[p] == '--ignore':
 							confirm = False
 							p += 1
 						else:
-							raise Exception('Option ' + commandList[p] + ' is not valid')
+							if p+1 >= cLen:
+								raise OpenPGPException("Missing argument after " + commandList[p])
+							elif commandList[p] == '-o' or commandList[p] == '--output':
+								outputFile = commandList[p+1]
+								if outputFile.endswith('.gpg') or outputFile.endswith('.asc'):
+									outputFile = outputFile[: -4]
+							elif commandList[p] == '-c' or commandList[p] == '--compress':
+								compress = commandList[p+1]
+								if compress == "zip":
+									compress = 1
+								elif compress == "zlib":
+									compress = 2
+								elif compress == "bzip2":
+									compress = 3
+								else:
+									raise OpenPGPException('compress must be zip, zlib or bzi2')
+							elif commandList[p] == '-p' or commandList[p] == '--pass':
+								passphrase = commandList[p + 1]
+							p += 2
 
 					if command == 'encrypt' or command == '-e':
 						self.encrypt(inputFile, user, outputFile, armor, compress, confirm)
@@ -142,9 +154,21 @@ class myOpenPGP:
 						self.savePublicKey(user, outputFile, passphrase, armor, compress, confirm)
 					elif command == 'export-secret-key' or command == '-sk':
 						self.savePrivateKey(user, outputFile, passphrase, armor, compress, confirm)
+			except OpenPGPException as e:
+				print e
+				print 'List of commands:'
+				print '  GenerateKey or -g'
+				print '  ReadFile or -r'
+				print '  Encrypt or -e'
+				print '  Sign or -s'
+				print '  Export-Key or -pk'
+				print '  Export-Secret-Key or -sk'
+				print '  Help or -h'
+				print '  Exit'
 			except Exception as e:
 				print e
 				logging.exception("Something awful happened!")
+			print ''
 
 	def setAsymmetricKeys(self, asymmetricKeys, asymKey = None, asymSubKey = None):
 		self.asymmetricKeys = asymmetricKeys
@@ -153,7 +177,7 @@ class myOpenPGP:
 		return self
 
 	def generateKeyRSA(self, userId, passphrase):
-		print 'Generating Key RSA'
+		print 'Generating Key RSA for user:', userId
 		asymmetricKey = RSAOpenPGP().generate(passphrase)
 		asymmetricKey.userId = userId
 		asymmetricKey.subKeys.append(RSAOpenPGP().generate(passphrase))
@@ -360,7 +384,7 @@ class myOpenPGP:
 		#5.14.  Modification Detection Code Packet (Tag 19)
 		sha = hashlib.sha1(self.extraParam + self.encodedFile[:p]).digest()
 		if sha != self.encodedFile[p:]:
-			raise Exception('Detected Modification on Packet')
+			raise OpenPGPException('Detected Modification on Packet')
 		return p+20
 
 	def write_ModificationDetectionCodePacket(self):
@@ -664,7 +688,7 @@ class myOpenPGP:
 			+ flagLastOnePass)
 
 	def readTag(self, tag, p, length):
-		print('tag:', tag, 'length of file:', length)
+		print('tag:', tag, 'length of packet:', length)
 		if tag == 5 or tag == 7 or tag == 6 or tag == 14:
 			keyRSA = RSAOpenPGP().read(self.encodedFile[p:p+length])
 			Util.display('fingerPrint', keyRSA.fingerPrint)
@@ -804,8 +828,8 @@ class myOpenPGP:
 			print self.encodedFile
 		else:
 			if needValidadion and os.path.isfile(fileName):
-				confirm = raw_input("The " + fileName + " file already exists. Do you want to overwrite it?").lower()
-				if confirm[0] != 'y':
+				confirm = raw_input("The " + fileName + " file already exists. Do you want to overwrite it?")
+				if confirm[0].lower() != 'y':
 					print 'File was not saved'
 					return self
 			open(fileName, "wb").write(self.encodedFile)
