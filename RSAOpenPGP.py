@@ -148,8 +148,7 @@ class RSAOpenPGP:
 
 	def leSecretData(self, passphrase):
 		if not self.hasSecretData:
-			print '>>>>>>>>>>>>>>>>>>>> not has secret data <<<<<<<<<<<<<<<<<<<<'
-			exit(1)
+			raise OpenPGPException('not has the private key for this message')
 
 		bs = Util.blockSize(self.symEncAlgo)
 		symKey = self.s2k.makeKey(bs, passphrase)

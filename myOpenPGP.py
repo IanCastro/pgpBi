@@ -97,6 +97,8 @@ class myOpenPGP:
 					print 'Obs: passphrase and user containing spaces need to be surrounded by \"(quotation marks)'
 				else:
 					if command == 'encrypt' or command == '-e' or command == 'sign' or command == '-s':
+						if cLen <= 1:
+							raise OpenPGPException('Command ' + command + ' need be folowed by FileName')
 						inputFile = commandList[1]
 						if not os.path.isfile(inputFile):
 							raise OpenPGPException(inputFile + " not is a valid file")
@@ -107,7 +109,7 @@ class myOpenPGP:
 						raise OpenPGPException('Command ' + command + ' is not valid')
 
 					user = ''
-					if commandList[p][0] != '-':
+					if p < cLen and len(commandList[p]) > 0 and commandList[p][0] != '-':
 						user = commandList[p]
 						p += 1
 
