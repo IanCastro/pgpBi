@@ -5,55 +5,12 @@ import hashlib
 
 myRandInt = random.SystemRandom().randint
 
-localTest = True
+localTest = False
 if localTest:
 	random.seed(0)
 	myRandInt = random.randint
 
-def auxF(h, M, f):
-	if h == 8:
-		hashAlgo = hashlib.sha256
-	elif h == 2:
-		hashAlgo = hashlib.sha1
-	else:
-		print '>>> !hashAlgo <<<'
-		exit(1)
-	# M = binascii.unhexlify(M)
-	# f = binascii.unhexlify(f)
-	# print binascii.hexlify(f)
-	for i in xrange(len(M)):
-		for j in xrange(i):
-			# print '?',hashAlgo(M[j: i]).hexdigest()
-			if hashAlgo(M[j: i]).digest() == f:
-				print 'ji:',j,i,hashAlgo(M[j: i]).hexdigest()
-	print '!ji'
-
-def auxF2(h, M, f):
-	if h == 8:
-		hashAlgo = hashlib.sha256
-	elif h == 2:
-		hashAlgo = hashlib.sha1
-	else:
-		print '>>> !hashAlgo <<<'
-		exit(1)
-	# M = binascii.unhexlify(M)
-	# f = binascii.unhexlify(f)
-	# print binascii.hexlify(f)
-	for i in xrange(len(M)):
-		print 'i', i, len(M)
-		for j in xrange(i):
-			for k in xrange(i, len(M)):
-				for l in xrange(i, k):
-					# print '?',hashAlgo(M[j: i]).hexdigest()
-					if hashAlgo(M[j: i] + M[l: k]).digest() == f:
-						print 'ji:',j,i,hashAlgo(M[j: i]).hexdigest()
-	print '!ji'
-
-def powModR(b, e, m):
-	return 1 if e == 0 else powModR(b*b%m, e//2, m)*(1 if e%2 == 0 else b)%m
-
 def powMod(b, e, mod):
-	#print('e', e)
 	o = 1
 	a = b
 	while e > 0:
@@ -66,12 +23,6 @@ def powMod(b, e, mod):
 def invMod(b, mod):
 	x, y, g = gcdE(b, mod)
 	return (x+mod)%mod if g == 1 else 0
-
-def gcdER(a, b):
-	if b == 0:
-		return 1, 0, a
-	x, y, g = gcdER(b, a%b)
-	return y, x - y*(a//b), g
 
 def gcdE(a, b):
 	x0, y0 = 1, 0
@@ -87,8 +38,7 @@ def blockSize(algo):
 	if algo == 7 or algo == 8 or algo == 9:
 		return 16
 	else:
-		print '''9.2.  Symmetric-Key Algorithms''', algo
-		exit(1)
+		raise OpenPGPException('9.2. Symmetric-Key Algorithms: ' + algo)
 
 def toint(str256):
 	return reduce(lambda x,y:x*256+ord(y), str256, 0)
@@ -128,18 +78,14 @@ def EME_PKCS1_v1_5_DECODE(EM):
 	#13.1.2.  EME-PKCS1-v1_5-DECODE
 	p = EM.find(chr(0), 1)
 	if p <= 8 or EM[0] != chr(0) or EM[1] != chr(2):
-		return ""
-		print '>>>>>>>>>>>>>>>>>>>> EME-PKCS1-v1_5-DECODE decryption error <<<<<<<<<<<<<<<<<<<<'
-		exit(1)
+		raise OpenPGPException('>>> EME-PKCS1-v1_5-DECODE decryption error <<<')
 	return EM[p+1:]
 
 def EME_PKCS1_v1_5_ENCODE(M, k):
 	#13.1.1.  EME-PKCS1-v1_5-ENCODE
 	psLen = k - len(M) - 3
 	if psLen < 8:
-		print '>>>>>>>>>>>>>>>>>>>> EME-PKCS1-v1_5-ENCODE message too long <<<<<<<<<<<<<<<<<<<<'
-		exit(1)
-
+		raise OpenPGPException('>>> EME-PKCS1-v1_5-ENCODE message too long <<<')
 	PS = ''.join(chr(myRandInt(1,255)) for i in range(psLen))
 	return chr(0) + chr(2) + PS + chr(0) + M
 
@@ -148,20 +94,18 @@ def EMSA_PKCS1_v1_5(M, hashAlgo, length):
 	T = ASN_1_DER(hashAlgo)
 	psLen = length - 3 - len(T) - len(M)
 	if psLen < 8:
-		print '>>>>>>>>>>>>>>>>>>>> EMSA-PKCS1-v1_5 intended encoded message length too short <<<<<<<<<<<<<<<<<<<<'
-		exit(1)
+		raise OpenPGPException('>>> EMSA-PKCS1-v1_5 intended encoded message length too short <<<')
 	return chr(0) + chr(1) + chr(0xff)*psLen + chr(0) + T + M
 
 def ASN_1_DER(hashAlgo):
 	if hashAlgo == 8:
 		return binascii.unhexlify('3031300d060960864801650304020105000420')
 	else:
-		print '''5.2.2.  Version 3 Signature Packet Format//The full hash prefixes'''
-		exit(1)
+		raise OpenPGPException('5.2.2. Version 3 Signature Packet Format: ' + hashAlgo)
 
 def TIMENOW():
 	if localTest:
-		return '\x5a\x49\x96\x21'#int2str256(1514772001, 4)
+		return '\x5a\x49\x96\x21'
 	else:
 		return int2str256(int(time.time()), 4)
 
@@ -171,8 +115,7 @@ def hashAlgo(algo):
 	elif algo == 2:
 		return hashlib.sha1
 	else:
-		print '''9.4.  Hash Algorithms''', algo
-		exit(1)
+		raise OpenPGPException('9.4. Hash Algorithms: ' + algo)
 
 def display(msg, str256):
 	print msg + ':', binascii.hexlify(str256)

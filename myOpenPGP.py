@@ -217,7 +217,6 @@ class myOpenPGP:
 		#5.1.  Public-Key Encrypted Session Key Packets (Tag 1)
 		version = ord(self.encodedFile[p])
 		p += 1
-		# print('version',version)
 		if version == 3:
 			keyId = self.encodedFile[p: p + 8]
 			p += 8
@@ -229,7 +228,6 @@ class myOpenPGP:
 				#rsa
 				p, mRSA = Util.leMPI(self.encodedFile, p)
 
-				# for asymKey in self.asymmetricKeys:
 				numTry = 0
 				for asymKey in self.allKeys():
 					if asymKey.keyId != keyId:
@@ -238,12 +236,7 @@ class myOpenPGP:
 					MM = asymKey.decodeRSA(mRSA, 'this is a pass')
 					MM = Util.EME_PKCS1_v1_5_DECODE(MM)
 					if MM == "" or Util.SampleChecksum(MM[1:-2]) != Util.toint(MM[-2:]):
-						# print 'MM',binascii.hexlify(MM)
-						# print Util.SampleChecksum(MM[1:-2])
-						# print Util.toint(MM[-2:])
 						continue
-						print '>>>>>>>>>>>>>>>>>>>> checksum of symmetric-key does not match <<<<<<<<<<<<<<<<<<<<'
-						exit(1)
 					self.symAlgo = ord(MM[0])
 					#print('algo', self.symAlgo)
 					self.symKey = MM[1:-2]# key to be used by the symmetric-key algorithm
@@ -251,26 +244,19 @@ class myOpenPGP:
 					break
 				else:
 					if numTry > 0:
-						print '>>>>>>>>>>>>>>>>>>>> checksum of symmetric-key does not match <<<<<<<<<<<<<<<<<<<<'
-						exit(1)
+						raise OpenPGPException('>>> checksum of symmetric-key does not match <<<')
 					print 'self.keyId',binascii.hexlify(keyId)
 					print '>>> not has the key for this criptografy, len(self.asymmetricKeys)',len(self.asymmetricKeys)
-					exit(1)
 			elif publicKeyAlgo == 16:
-				print '''5.5.2.  Public-Key Packet Formats Elgamal public key'''
-				exit(1)
 				#Elgamal
+				raise OpenPGPException('5.5.2. Public-Key Packet Formats Elgamal public key: ' + publicKeyAlgo)
 			elif publicKeyAlgo == 17:
-				print '''5.5.2.  Public-Key Packet Formats DSA public key'''
-				exit(1)
 				#DSA
+				raise OpenPGPException('5.5.2. Public-Key Packet Formats DSA public key: ' + publicKeyAlgo)
 			else:
-				print('publicKeyAlgo',publicKeyAlgo,'not suported')
-				exit(1)
-
+				raise OpenPGPNotValidException('Public Key Algo', publicKeyAlgo, [1, 2, 3, 16, 17])
 		else:
-			print '>>> Public-Key Encrypted Session Key version must be 3 <<<'
-			exit(1)
+			raise OpenPGPVersionException('Encrypted Session Key', version, [3])
 		return p
 
 	def write_Public_Key_Encrypted_Session_Key_Packets(self):
@@ -302,16 +288,13 @@ class myOpenPGP:
 				lack = bs - len(encrData)%bs
 				data = AES.new(self.symKey, AES.MODE_CFB, chr(0)*bs, segment_size = 128).decrypt(encrData + ' '*lack)[:-lack]
 			else:
-				print '''Not Implemented yet'''
-				exit(1)
+				raise OpenPGPException('9.3. Compression Algorithms: ' + self.symAlgo)
 			if data[14:16] != data[16:18]:
-				print '>>>>>>>>>>>>>>>>>>>> session key is incorrect <<<<<<<<<<<<<<<<<<<<'
-				exit(1)
+				raise OpenPGPIncorrectException('session key', 'repetition bits', data[16:18], data[14:16])
 			print 'Reading myOpenPGP Protected Data Packet'
 			myOpenPGP().setAsymmetricKeys(self.asymmetricKeys).readFile(data[18:], data[:18])
 		else:
-			print '>>> Sym. Encrypted Integrity Protected Data Packet version must be 1 <<<'
-			exit(1)
+			raise OpenPGPVersionException('Sym. Encrypted Integrity Protected Data Packet', version, [1])
 		return p
 
 	def write_SymEncryptedIntegrityProtectedDataPacket(self, tags):
@@ -333,47 +316,41 @@ class myOpenPGP:
 		#5.9.  Literal Data Packet (Tag 11)
 		formatted = self.encodedFile[p]
 		p += 1
-		# print('formatted',formatted)
 		if formatted == 'b':
 			fileNameLen = ord(self.encodedFile[p])
 			p += 1
 			fileName = self.encodedFile[p:p+fileNameLen]
 			p += fileNameLen
-			# print('fileName',fileName)
 			if fileName == "_CONSOLE":
-				print '''5.9.  Literal Data Packet (Tag 11)//for your eyes only'''
-				#exit(1)
+				print '''5.9. Literal Data Packet (Tag 11)//for your eyes only'''
 			if self.encodedFile[p: p+4] != chr(0)*4:
 				dateCreated = datetime.fromtimestamp(Util.toint(self.encodedFile[p: p+4])).strftime('%H:%M:%S %d/%m/%Y')
 			else:
 				dateCreated = 'whithout date'
 			p += 4
-			# print(dateCreated.strftime('%H:%M:%S %d/%m/%Y'))
 			self.paketStart = p
 			self.paketEnd = pEnd
 			literalData = self.encodedFile[p:pEnd]
-			# self.encodedFile = self.encodedFile[:p] + 'N' + self.encodedFile[p+1:]
 			p = pEnd
-			# print('literalData',literalData)
 			print 'file:', (fileName, dateCreated, literalData)
 			if os.path.isfile(fileName):
 				print 'Already exists the file', fileName, ', the file will not be verified.'
 			elif fileName != "_CONSOLE":
 				open(fileName, "w").write(literalData)
 				print 'The data was saved in file', fileName
+		elif formatted == 't':
+			raise OpenPGPException('Not Implemented format "t" for Literal Data Packet')
+		elif formatted == 'u':
+			raise OpenPGPException('Not Implemented format "u" for Literal Data Packet')
 		else:
-			print "Literal Data Packet must be formatted with 'b', 't' or 'u'"
-			exit(1)
+			raise OpenPGPNotValidException('Literal Data Packet format', formatted, ['b', 't', 'u'])
 		return p
 
 	def write_LiteralDataPacket(self, fileName):
 		#5.9.  Literal Data Packet (Tag 11)
 		formatted = 'b'
-
 		fileNameLen = chr(len(fileName))
-
 		date = chr(0)*4
-
 		self.literalData = open(fileName, "r").read()
 
 		return (formatted
@@ -408,7 +385,6 @@ class myOpenPGP:
 		while p != pEnd:
 			stOctet = ord(self.encodedFile[p])
 			p += 1
-			# print('stOctet',stOctet)
 			if stOctet < 192:
 				length = stOctet
 			elif stOctet < 255:
@@ -421,14 +397,13 @@ class myOpenPGP:
 			subpacketType = ord(self.encodedFile[p])
 			subpacketData = self.encodedFile[p+1: p+length]
 			p += length
-			# subpacketData = binascii.hexlify(subpacketData)
 			dataSet[subpacketType] = subpacketData
 		return dataSet
 
 	def makeSubPacket(self, dataSet):
 		out = ''
 		for subpacketType in dataSet:
-			length = self.len2NewFormat(1 + len(dataSet[subpacketType]))#precissa de modificacoes
+			length = self.len2NewFormat(1 + len(dataSet[subpacketType]))
 			out += length + chr(subpacketType) + dataSet[subpacketType]
 		return out
 
@@ -437,44 +412,34 @@ class myOpenPGP:
 		pv = p
 		version = ord(self.encodedFile[p])
 		p += 1
-		# print('version:',version)
 		if version == 3:
-			print '''5.2.2.  Version 3 Signature Packet Format'''
-			exit(1)
+			raise OpenPGPException('5.2.2. Version 3 Signature Packet Format')
 		elif version == 4:
 			signatureType = ord(self.encodedFile[p])
-			# print('signatureType:',signatureType)
 			p += 1
 
 			publicKeyAlgo = ord(self.encodedFile[p])
-			# print('publicKeyAlgo:',publicKeyAlgo)
 			p += 1
 
 			hashAlgoId = ord(self.encodedFile[p])
-			# print('hashAlgoId:',hashAlgoId)
 			p += 1
 			hashAlgo = Util.hashAlgo(hashAlgoId)
 
 			hashedSubpacketLen = Util.toint(self.encodedFile[p: p+2])
-			# print('hashedSubpacketLen:',hashedSubpacketLen)
 			p += 2
 
 			hashedSubpacket = self.leSubPacket(p, p+hashedSubpacketLen)
 			p += hashedSubpacketLen
-			# print('hashedSubpacket:', hashedSubpacket)
 
 			ph = p
 
 			unhashedSubpacketLen = Util.toint(self.encodedFile[p: p+2])
-			# print('unhashedSubpacketLen:',unhashedSubpacketLen)
 			p += 2
 
 			unhashedSubpacket = self.leSubPacket(p, p+unhashedSubpacketLen)
 			p += unhashedSubpacketLen
-			# print('unhashedSubpacket:', unhashedSubpacket)
 
 			signedHashValue = self.encodedFile[p: p+2]
-			# print('signedHashValue:', binascii.hexlify(signedHashValue))
 			p += 2
 
 			while p != pEnd:
@@ -497,10 +462,8 @@ class myOpenPGP:
 					elif signatureType == 0x00:
 						sig = self.encodedFile[self.paketStart:self.paketEnd]
 
-						# print('len(self.asymmetricKeys)', len(self.asymmetricKeys))
 						asymKeys = []
 						for asymKey in self.allKeys():
-							# print 'asymKey.keyId', binascii.hexlify(asymKey.keyId)
 							if asymKey.keyId == self.keyId:
 								asymKeys.append(asymKey)
 					elif signatureType == 0x10:
@@ -517,8 +480,7 @@ class myOpenPGP:
 								if asymKey.keyId == keyId:
 									asymKeys.append(asymKey)
 					else:
-						print '''Not Implemented yet signatureType''' , hex(signatureType)
-						exit(1)
+						raise OpenPGPException('Not Implemented yet signatureType: ' + hex(signatureType))
 
 					sig += self.encodedFile[pv:ph]
 					sig += binascii.unhexlify("04ff")
@@ -531,30 +493,23 @@ class myOpenPGP:
 						keyId = self.keyId if 16 not in unhashedSubpacket else unhashedSubpacket[16]
 						raise OpenPGPKeyIdException(keyId, len(self.asymmetricKeys))
 					elif len(asymKeys) > 1:
-						print '>>> has multiples possibilities of key for this signature <<<',len(self.asymmetricKeys)
-						exit(1)
+						raise OpenPGPException('>>> has multiples possibilities of key for this signature <<<' + len(self.asymmetricKeys))
 					else:
-						#Util.display('asymKeys[0].unsignRSA(mm)',asymKeys[0].unsignRSA(mm))
 						mm2 = asymKeys[0].unsignRSA(mm)[-len(hld):]
-						# print 'mml2', binascii.hexlify(mm2)
 						if hld != mm2:
 							raise OpenPGPIncorrectException('signed hash', hashAlgo.__name__, hld, mm2)
 						else:
 							print 'Signature', hex(signatureType), 'validated with success:', binascii.hexlify(mm2)
 				elif publicKeyAlgo == 16:
 					#Elgamal
-					print '''5.5.2.  Public-Key Packet Formats Elgamal public key'''
-					exit(1)
+					raise OpenPGPException('5.5.2. Public-Key Packet Formats Elgamal public key')
 				elif publicKeyAlgo == 17:
 					#DSA
-					print '''>>> 5.5.2.  Public-Key Packet Formats DSA public key'''
-					# exit(1)
+					raise OpenPGPException('5.5.2. Public-Key Packet Formats DSA public key')
 				else:
-					print('publicKeyAlgo',publicKeyAlgo,'not suported')
-					exit(1)
+					raise OpenPGPNotValidException('Public Key Algo', publicKeyAlgo, [1, 2, 3, 16, 17])
 		else:
-			print '>>> Signature Packet version must be 3 or 4 <<<'
-			exit(1)
+			raise OpenPGPVersionException('Signature Packet', version, [3, 4])
 		return p
 
 	def write_SignaturePacket(self, signatureType, hashAlgoId, passphrase):
@@ -583,8 +538,7 @@ class myOpenPGP:
 			sig = self.asymKey.packet
 			sig += self.asymSubKey.packet
 		else:
-			print '''Not Implemented(write) yet signatureType''' , hex(signatureType)
-			exit(1)
+			raise OpenPGPException('Not Implemented(write) yet signatureType ' + hex(signatureType))
 
 		sig += fistPart
 		sig += binascii.unhexlify("04ff")
@@ -614,15 +568,12 @@ class myOpenPGP:
 			myOpenPGP().setAsymmetricKeys(self.asymmetricKeys).readFile(decompressedFile, self.extraParam)
 		elif compressAlgo == 2:
 			#zlib
-			print '''9.3.  Compression Algorithms: zlib'''
-			exit(1)
+			raise OpenPGPException('9.3. Compression Algorithms: zlib')
 		elif compressAlgo == 3:
 			#bzip2
-			print '''9.3.  Compression Algorithms bzip2'''
-			exit(1)
+			raise OpenPGPException('9.3. Compression Algorithms: bzip2')
 		else:
-			print('compressAlgo',compressAlgo,'not suported')
-			exit(1)
+			raise OpenPGPNotValidException('Compress Algo', compressAlgo, [1, 2, 3])
 		return pEnd
 
 	def write_CompressedDataPacket(self, compressAlgo, tags):
@@ -635,15 +586,12 @@ class myOpenPGP:
 			return chr(compressAlgo) + compressZip.compress(data) + compressZip.flush()
 		elif compressAlgo == 2:
 			#zlib
-			print '''9.3.  Compression Algorithms: zlib'''
-			exit(1)
+			raise OpenPGPException('9.3. Compression Algorithms: zlib')
 		elif compressAlgo == 3:
 			#bzip2
-			print '''9.3.  Compression Algorithms bzip2'''
-			exit(1)
+			raise OpenPGPException('9.3. Compression Algorithms: bzip2')
 		else:
-			print('compressAlgo',compressAlgo,'not suported')
-			exit(1)
+			raise OpenPGPNotValidException('Compress Algo', compressAlgo, [1, 2, 3])
 		return pEnd
 
 	def read_One_Pass_Signature_Packets(self, p):
@@ -669,12 +617,9 @@ class myOpenPGP:
 			p += 1
 
 			if flagLastOnePass == 0:
-				print ''' 5.4.  One-Pass Signature Packets (Tag 4) '''
-				exit(1)
-			# else:
+				raise OpenPGPException('5.4. One-Pass Signature Packets (Tag 4)')
 		else:
-			print '>>> One-Pass Signature Packets version must be 3 <<<'
-			exit(1)
+			raise OpenPGPVersionException('One-Pass Signature Packet', version, [3])
 		return p
 
 	def write_One_Pass_Signature_Packets(self, signatureType, hashAlgoId):
@@ -732,9 +677,7 @@ class myOpenPGP:
 		elif tag == 4:
 			return self.read_One_Pass_Signature_Packets(p)
 		else:
-			print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!tag readTag', tag)
-			print('!length', length)
-			exit(1)
+			raise OpenPGPNotValidException('Read Tag', tag, [1, 2, 4, 5, 6, 7, 8, 11, 13, 14, 18, 19])
 
 	def writeTag(self, tagInfo):
 		tag = tagInfo[0]
@@ -763,8 +706,7 @@ class myOpenPGP:
 		elif tag == 8:
 			return self.write_CompressedDataPacket(tagInfo[1], tagInfo[2])
 		else:
-			print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!tag writeTag', tag)
-			exit(1)
+			raise OpenPGPNotValidException('Write Tag', tag, [1, 2, 4, 5, 6, 7, 8, 11, 13, 14, 18, 19])
 			
 	def crc24(self, octets):
 		#6.1.  An Implementation of the CRC-24 in "C"
@@ -791,17 +733,6 @@ class myOpenPGP:
 		return self
 
 	def decodeAsc(self):
-		# p = 5
-		# headers = {'BEGIN PGP MESSAGE',
-		# 'BEGIN PGP PUBLIC KEY BLOCK',
-		# 'BEGIN PGP PRIVATE KEY BLOCK',
-		# 'BEGIN PGP MESSAGE, PART X/Y',
-		# 'BEGIN PGP MESSAGE, PART X',
-		# 'BEGIN PGP SIGNATURE'}
-		# for h in headers:
-		# 	if self.encodedFile[p: p+len(h)] == h:
-		# 		# print h
-		# 		p += len(h)+6
 		stringFile = self.encodedFile.split('\n')
 		p = 0
 		while stringFile[p].strip() != '':
@@ -814,10 +745,7 @@ class myOpenPGP:
 		self.encodedFile = base64.b64decode(''.join(stringFile[p:q]))
 		crcFile = self.crc24(self.encodedFile)
 		if Util.toint(base64.b64decode(stringFile[q][1:])) != crcFile:
-			print '>>>>>>>>>>>>>>>>>>>> corrupted file <<<<<<<<<<<<<<<<<<<<'
-			print '> crc24 on file',stringFile[q][1:]
-			print '> crc24 calculeded',base64.b64encode(Util.int2str256(crcFile, 3))
-			exit(1)
+			raise OpenPGPIncorrectException('OpenPGP Armor', 'crc24', Util.toint(base64.b64decode(stringFile[q][1:])), crcFile)
 		return self
 
 	def saveFile(self, fileName, armor = None, needValidadion = False):
@@ -947,8 +875,7 @@ class myOpenPGP:
 		elif length < (1<<32):
 			return chr(255) + int2str256(length, 4)
 		else:
-			print '''4.2.2.4.  Partial Body Lengths'''
-			exit(1)
+			raise OpenPGPException('4.2.2.4. Partial Body Lengths: ' + length)
 
 	def writeFile(self, tags, extraParam = None):
 		self.encodedFile = ''
@@ -969,22 +896,16 @@ class myOpenPGP:
 
 		p = 0
 		while(p < len(self.encodedFile)):
-			# print(p,len(self.encodedFile))
 			pTag = ord(self.encodedFile[p])
 			p += 1
-			# print('pTag',pTag)
 			one = pTag & 128#1<<7
 			if not one:
-				print '>>>>>>>>>>>>>>>>>>>> the beggin of block must be 1 <<<<<<<<<<<<<<<<<<<<'
-				print binascii.hexlify(self.encodedFile[:p-1])
-				print binascii.hexlify(self.encodedFile[p-1:])
-				exit(1)
+				raise OpenPGPException('the beggin of packet must be 1: ' + pTag)
 			newFormat = pTag & 64#1<<6
 			if newFormat:
 				tag = pTag & 63#(1<<6)-1
 				stOctet = ord(self.encodedFile[p])
 				p += 1
-				# print('stOctet',stOctet)
 				if stOctet < 192:
 					length = stOctet
 				elif stOctet < 224:
@@ -992,41 +913,24 @@ class myOpenPGP:
 					p += 1
 					length = (stOctet - 192 << 8) + ndOctet + 192
 				elif stOctet == 255:
-					#length = reduce(lambda x,y:x*256+ord(y), self.encodedFile[p: p + 4], 0)
 					length = Util.toint(self.encodedFile[p: p + 4])
 					p += 4
 				else:
-					print '''4.2.2.4.  Partial Body Lengths'''
-					exit(1)
+					raise OpenPGPException('4.2.2.4. Partial Body Lengths: ' + stOctet)
 			else:
 				tag = (pTag & 63) >> 2#(pTag & (1<<6)-1) >> 2
 				lenType = pTag & 3#(1<<2)-1
-				#print('lenType',lenType)
 				if lenType < 3:
-					#length = reduce(lambda x,y:x*256+ord(y), self.encodedFile[p: p + (1<<lenType)], 0)
 					length = Util.toint(self.encodedFile[p: p + (1<<lenType)])
 					p += (1<<lenType)
 				else:
-					#print '''4.2.1.  Old Format Packet Lengths// 3 - The packet is of indeterminate length'''
-					#exit(1)
 					length = len(self.encodedFile) - p
 
-			#print('one',one)
-			#print('newFormat',newFormat)
-			#print('tag',tag)
-			#print('length',length)
-			#print '??? ',p, length, p+length, len(self.encodedFile)
 			p = self.readTag(tag, p, length)
 
-		# print()
-		# print(p)
-		# print(len(self.encodedFile))
 		if p == len(self.encodedFile):
 			print '== File read with success'
 		else:
 			print '== Error reading file'
-			exit(1)
-
-		# self.encodeAsc()
-		# print self.encodedFile
+			raise OpenPGPException('Error reading file')
 		return self

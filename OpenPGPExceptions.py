@@ -8,6 +8,11 @@ class OpenPGPVersionException(OpenPGPException):
 		msg = "version of " + value + " can't be " + str(triedVersion) + " must be " + ', '.join(map(str, validVersions))
 		super(OpenPGPVersionException, self).__init__(msg)
 
+class OpenPGPNotValidException(OpenPGPException):
+	def __init__(self, value, tried, validValues):
+		msg = value + " can't be " + str(tried) + " must be " + ', '.join(map(str, validValues))
+		super(OpenPGPVersionException, self).__init__(msg)
+
 class OpenPGPIncorrectException(OpenPGPException):
 	def __init__(self, incorrect, value, actual, expected):
 		msg = incorrect + " is incorrect the " + value + " is " + binascii.hexlify(actual) + " and must be " + binascii.hexlify(expected)

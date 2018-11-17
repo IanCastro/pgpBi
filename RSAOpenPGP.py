@@ -11,8 +11,7 @@ class RSAOpenPGP:
 		self.version = ord(body[0])
 		p = 1
 		if self.version == 3:
-			print '''5.5.2.  Public-Key Packet Formats //version 3'''
-			exit(1)
+			raise OpenPGPException('5.5.2. Public-Key Packet Formats: ' + self.version)
 		elif self.version == 4:
 			self.dateCreated = body[p: p+4]
 			p += 4
@@ -40,25 +39,19 @@ class RSAOpenPGP:
 					self.readSecret(body[p:])
 			elif publicKeyAlgo == 16:
 				#Elgamal
-				print '''>>> 5.5.2.  Public-Key Packet Formats Elgamal public key'''
 				p, pDSA = Util.leMPI(body, p)
 				p, gDSA = Util.leMPI(body, p)
 				p, yDSA = Util.leMPI(body, p)
-				exit(1)
 			elif publicKeyAlgo == 17:
 				#DSA
-				print '''>>> 5.5.2.  Public-Key Packet Formats DSA public key'''
 				p, pDSA = Util.leMPI(body, p)
 				p, qDSA = Util.leMPI(body, p)
 				p, gDSA = Util.leMPI(body, p)
 				p, yDSA = Util.leMPI(body, p)
-				exit(1)
 			else:
-				print('publicKeyAlgo',publicKeyAlgo,'not suported')
-				exit(1)
+				raise OpenPGPException('publicKeyAlgo ' + publicKeyAlgo + 'not suported')
 		else:
-			print '>>> Public key paket version must be 3 or 4 <<<'
-			exit(1)
+			raise OpenPGPVersionException('Public key paket', self.version, [3, 4])
 		return self
 
 	def readSecret(self, body):
@@ -103,7 +96,7 @@ class RSAOpenPGP:
 			self.pRSA = nextPrime(Util.myRandInt((9<<1020), (11<<1020)-1))
 			self.qRSA = nextPrime(Util.myRandInt((13<<1020), (15<<1020)-1))
 			self.nRSA = self.pRSA*self.qRSA
-			self.eRSA = 65537#0011010001
+			self.eRSA = 65537#0x0011010001
 			self.uRSA = Util.invMod(self.pRSA, self.qRSA)
 			if self.uRSA == 0:
 				continue;
@@ -120,7 +113,7 @@ class RSAOpenPGP:
 		self.uStrRSA = Util.int2str256(self.uRSA, 0)
 
 		self.messegeLen = len(self.nStrRSA)
-		self.dateCreated = Util.TIMENOW()#dateCreated
+		self.dateCreated = Util.TIMENOW()
 
 		self.s2k = S2kOpenPGP().generate()
 		self.IV = Util.randOctets(bs)
@@ -159,8 +152,7 @@ class RSAOpenPGP:
 			# AES with 128-bit key
 			data = AES.new(symKey, AES.MODE_CFB, self.IV, segment_size = 128).decrypt(self.encrData + ' '*lack)[:-lack]
 		else:
-			print '''9.2.  Symmetric-Key Algorithms'''
-			exit(1)
+			raise OpenPGPException('9.2. Symmetric-Key Algorithms: ' + self.symEncAlgo)
 
 		if hashlib.sha1(data[:-20]).digest() != data[-20:]:
 			raise OpenPGPIncorrectException('passphrase', 'sha1', hashlib.sha1(data[:-20]).digest(), data[-20:])
