@@ -52,7 +52,7 @@ class myOpenPGP:
 						raise OpenPGPException('Only RSA Avaliable')
 					name = raw_input("User Name?") if cLen <= 2 else commandList[2]
 					email = raw_input("User E-mail?") if cLen <= 3 else commandList[3]
-					passphrase = getpass("Passphase?") if cLen <= 4 else commandList[4]
+					passphrase = getpass("Passphrase?") if cLen <= 4 else commandList[4]
 					if cLen > 5:
 						raise OpenPGPException('There are more arguments than expected')
 
@@ -71,7 +71,7 @@ class myOpenPGP:
 						print 'Not yet implemented the more detailed help for command', command
 						print 'Here is the basic help:',
 					print 'Commands:'
-					print '(GenerateKey | -g) [Cryptosystem [UserName [e-mail [passphase]]]]'
+					print '(GenerateKey | -g) [Cryptosystem [UserName [e-mail [passphrase]]]]'
 					print '(ReadFile | -r) [FileName]'
 					print '(Encrypt | -e) FileName [User] [Options...]'
 					print '(Sign | -s) FileName [User] [Options...]'
@@ -84,7 +84,7 @@ class myOpenPGP:
 					print 'Cryptosystem: Cryptosystem used to generate the key, only "rsa" avaliable'
 					print 'UserName: name of the owner of the key'
 					print 'e-mail: e-mail of the owner of the key'
-					print 'passphase: sequence of words to protect from other people using the key'
+					print 'passphrase: sequence of words to protect from other people using the key'
 					print 'FileName: File to be processed'
 					print 'User: UserName or e-mail'
 					print 'Options: one or more of these arguments'
